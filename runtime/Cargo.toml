@@ -1,7 +1,7 @@
 [package]
-name = "substratee-node-runtime"
+name = "encointer-node-runtime"
 version = "4.0.1"
-authors = ["Supercomputing Systems AG <info@scs.ch>"]
+authors = ["encointer.org <alain@encointer.org>"]
 edition = "2018"
 
 [dependencies.aura]
@@ -160,6 +160,17 @@ rev = "3bf9540e72df5ecb3955845764dfee7dcdbb26b5"
 [dependencies.host_calls]
 default-features = false
 path = "../host_calls"
+
+[dev-dependencies.node-primitives]
+default-features = false
+git = "https://github.com/paritytech/substrate"
+package = "node-primitives"
+rev = "9b08e7ff938a45dbec7fcdb854063202e2b0cb48"
+
+[dev-dependencies.test-client]
+package = "substrate-test-runtime-client"
+git = "https://github.com/paritytech/substrate"
+rev = "9b08e7ff938a45dbec7fcdb854063202e2b0cb48"
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.4" }
