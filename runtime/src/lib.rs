@@ -3,6 +3,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
+#![feature(vec_remove_item)]
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -10,12 +11,12 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use rstd::prelude::*;
 use primitives::{OpaqueMetadata, crypto::key_types};
-use sr_primitives::{
+use runtime_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
 	impl_opaque_keys, AnySignature
 };
-use sr_primitives::traits::{NumberFor, BlakeTwo256, Block as BlockT, DigestFor, StaticLookup, Verify, ConvertInto};
-use sr_primitives::weights::Weight;
+use runtime_primitives::traits::{NumberFor, BlakeTwo256, Block as BlockT, DigestFor, StaticLookup, Verify, ConvertInto};
+use runtime_primitives::weights::Weight;
 use babe::{AuthorityId as BabeId};
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use grandpa::fg_primitives::{self, ScheduledChange};
@@ -29,13 +30,16 @@ use version::NativeVersion;
 
 // A few exports that help ease life for downstream crates.
 #[cfg(any(feature = "std", test))]
-pub use sr_primitives::BuildStorage;
+pub use runtime_primitives::BuildStorage;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
-pub use sr_primitives::{Permill, Perbill};
+pub use runtime_primitives::{Permill, Perbill};
 pub use support::{StorageValue, construct_runtime, parameter_types};
 
-pub use substratee_registry::Call as SubstraTEERegistryCall;
+//pub use substratee_registry::Call as SubstraTEERegistryCall;
+pub use encointer_ceremonies::Call as EncointerCeremoniesCall;
+
+pub use encointer_ceremonies::CeremonyPhaseType;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -65,7 +69,8 @@ pub type DigestItem = generic::DigestItem<Hash>;
 
 
 
-pub mod substratee_registry;
+//pub mod substratee_registry;
+pub mod encointer_ceremonies;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -74,7 +79,7 @@ pub mod substratee_registry;
 pub mod opaque {
 	use super::*;
 
-	pub use sr_primitives::OpaqueExtrinsic as UncheckedExtrinsic;
+	pub use runtime_primitives::OpaqueExtrinsic as UncheckedExtrinsic;
 
 	/// Opaque block header type.
 	pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
@@ -98,7 +103,7 @@ pub mod opaque {
 /// This runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
-	impl_name: create_runtime_str!("test-node"),
+	impl_name: create_runtime_str!("encointer-node"),
 	authoring_version: 3,
 	spec_version: 4,
 	impl_version: 4,
@@ -255,8 +260,13 @@ impl sudo::Trait for Runtime {
 }
 
 
-impl substratee_registry::Trait for Runtime {
+//impl substratee_registry::Trait for Runtime {
+//	type Event = Event;
+//}
+
+impl encointer_ceremonies::Trait for Runtime {
 	type Event = Event;
+	type Signature = Signature;
 }
 
 construct_runtime!(
@@ -272,7 +282,8 @@ construct_runtime!(
 		Indices: indices::{default, Config<T>},
 		Balances: balances,
 		Sudo: sudo,
-        SubstraTEERegistry: substratee_registry::{Module, Call, Storage, Event<T>},
+//        SubstraTEERegistry: substratee_registry::{Module, Call, Storage, Event<T>},
+		EncointerCeremonies: encointer_ceremonies::{Module, Call, Storage, Config<T>, Event<T>},
 	}
 );
 

@@ -1,7 +1,7 @@
 [package]
-name = "substratee-node-runtime"
+name = "encointer-node-runtime"
 version = "4.0.1"
-authors = ["Supercomputing Systems AG <info@scs.ch>"]
+authors = ["encointer.org <alain@encointer.org>"]
 edition = "2018"
 
 
@@ -27,9 +27,11 @@ git = "https://github.com/paritytech/substrate"
 package = "sr-std"
 rev = "9b08e7ff938a45dbec7fcdb854063202e2b0cb48"
 
-[dependencies.sr-io]
+[dependencies.runtime-io]
 default-features = false
-path = '../sr-tee-io'
+#path = '../sr-tee-io'
+git = "https://github.com/paritytech/substrate"
+rev = "9b08e7ff938a45dbec7fcdb854063202e2b0cb48"
 package = 'sr-io'
 
 [dependencies.version]
@@ -112,7 +114,7 @@ git = "https://github.com/paritytech/substrate"
 package = "srml-sudo"
 rev = "9b08e7ff938a45dbec7fcdb854063202e2b0cb48"
 
-[dependencies.sr-primitives]
+[dependencies.runtime-primitives]
 default-features = false
 git = "https://github.com/paritytech/substrate"
 package = "sr-primitives"
@@ -130,16 +132,28 @@ git = "https://github.com/paritytech/substrate"
 package = "substrate-offchain-primitives"
 rev = "9b08e7ff938a45dbec7fcdb854063202e2b0cb48"
 
+[dev-dependencies.node-primitives]
+default-features = false
+git = "https://github.com/paritytech/substrate"
+package = "node-primitives"
+rev = "9b08e7ff938a45dbec7fcdb854063202e2b0cb48"
+
+[dev-dependencies.test-client]
+package = "substrate-test-runtime-client"
+git = "https://github.com/paritytech/substrate"
+rev = "9b08e7ff938a45dbec7fcdb854063202e2b0cb48"
+
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.3" }
 
 [features]
+#default = ["std", "enable_host_calls"]
 default = ["std"]
 std = [
     "codec/std",
     "client/std",
     "rstd/std",
-    "sr-io/std",
+    "runtime-io/std",
     "support/std",
     "balances/std",
     "babe/std",
@@ -148,7 +162,7 @@ std = [
     "indices/std",
     "grandpa/std",    
     "primitives/std",
-    "sr-primitives/std",
+    "runtime-primitives/std",
     "system/std",
     "timestamp/std",
     "sudo/std",
@@ -162,19 +176,19 @@ no_global_allocator = [
 	"rstd/no_global_allocator",
 ]
 no_panic_handler = [
-    "sr-io/no_panic_handler"
+    "runtime-io/no_panic_handler"
 ]
 no_oom = [
-    "sr-io/no_oom"
+    "runtime-io/no_oom"
 ]
 
 enable_host_calls = [
-    "sr-io/enable_host_calls",
+#    "runtime-io/enable_host_calls",
 ]
 
 no_std = [
 ]
 
-[patch."https://github.com/paritytech/substrate"]
-sr-io = { package = "sr-io", path = "../sr-tee-io", default-features = false}
-substrate-executor = { path = "../substratee-executor", default-features = false}
+#[patch."https://github.com/paritytech/substrate"]
+#sr-io = { package = "sr-io", path = "../sr-tee-io", default-features = false}
+#substrate-executor = { path = "../substratee-executor", default-features = false}
