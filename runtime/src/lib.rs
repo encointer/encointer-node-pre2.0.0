@@ -4,6 +4,7 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 #![feature(vec_remove_item)]
+#![feature(associated_type_defaults)]
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -243,7 +244,8 @@ impl sudo::Trait for Runtime {
 
 impl encointer_ceremonies::Trait for Runtime {
 	type Event = Event;
-	type Signature = Signature;
+	type Public = <MultiSignature as Verify>::Signer;
+	type Signature = MultiSignature;
 }
 
 construct_runtime!(
@@ -262,6 +264,7 @@ construct_runtime!(
 		Sudo: sudo,
 //        SubstraTEERegistry: substratee_registry::{Module, Call, Storage, Event<T>},
 		EncointerCeremonies: encointer_ceremonies::{Module, Call, Storage, Config<T>, Event<T>},
+		RandomnessCollectiveFlip: randomness_collective_flip::{Module, Call, Storage},
 	}
 );
 

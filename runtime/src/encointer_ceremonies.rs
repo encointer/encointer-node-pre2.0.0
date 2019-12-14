@@ -21,8 +21,9 @@ use system::{ensure_signed, ensure_root};
 use rstd::prelude::*;
 use rstd::cmp::min;
 
-use runtime_primitives::traits::{Verify, Member, CheckedAdd};
-use runtime_io::print;
+use sr_primitives::traits::{Verify, Member, CheckedAdd, IdentifyAccount};
+use sr_primitives::MultiSignature;
+use runtime_io::misc::print_utf8;
 
 use codec::{Codec, Encode, Decode};
 
@@ -31,7 +32,8 @@ use serde::{Serialize, Deserialize};
 
 pub trait Trait: system::Trait + balances::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-	type Signature: Verify<Signer = Self::AccountId> + Member + Decode + Encode;	
+    type Public: IdentifyAccount<AccountId = Self::AccountId>;
+    type Signature: Verify<Signer = Self::Public> + Member + Decode + Encode;
 }
 
 const SINGLE_MEETUP_INDEX: u64 = 1;
@@ -52,16 +54,16 @@ impl Default for CeremonyPhaseType {
     fn default() -> Self { CeremonyPhaseType::REGISTERING }
 }
 
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, Default, Debug)]
+//#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Witness<Signature, AccountId> {
 	pub claim: ClaimOfAttendance<AccountId>,
 	pub signature: Signature,
 	pub public: AccountId,
 }
 
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, Default, Debug)]
+//#[cfg_attr(feature = "std", derive(Debug))]
 pub struct ClaimOfAttendance<AccountId> {
 	pub claimant_public: AccountId,
 	pub ceremony_index: CeremonyIndexType,
@@ -135,7 +137,7 @@ decl_module! {
 
 			<CurrentPhase>::put(next_phase);
 			Self::deposit_event(RawEvent::PhaseChangedTo(next_phase));
-			print("phase changed");
+			print_utf8(b"phase changed");
 			Ok(())
 		}
 
@@ -180,16 +182,16 @@ decl_module! {
 				let witness = &witnesses[w];
 				let witness_account = &witnesses[w].public;
 				if meetup_participants.contains(witness_account) == false { 
-					print("ignoring witness that isn't a meetup participant");
+					print_utf8(b"ignoring witness that isn't a meetup participant");
 					continue };
 				if witness.claim.ceremony_index != cindex { 
-					print("ignoring claim with wrong ceremony index");
+					print_utf8(b"ignoring claim with wrong ceremony index");
 					continue };
 				if witness.claim.meetup_index != meetup_index { 
-					print("ignoring claim with wrong meetup index");
+					print_utf8(b"ignoring claim with wrong meetup index");
 					continue };
 				if Self::verify_witness_signature(witness.clone()).is_err() { 
-					print("ignoring witness with bad signature");
+					print_utf8(b"ignoring witness with bad signature");
 					continue };
 				// witness is legit. insert it!
 				verified_witness_accounts.insert(0, witness_account.clone());
@@ -285,19 +287,19 @@ impl<T: Trait> Module<T> {
 			let (n_confirmed, n_honest_participants) = match Self::ballot_meetup_n_votes(SINGLE_MEETUP_INDEX) {
 				Some(nn) => nn,
 				_ => {
-					print("skipping meetup because votes for num of participants are not dependable");
+					print_utf8(b"skipping meetup because votes for num of participants are not dependable");
 					continue;
 				},
 			};
 			let mut meetup_participants = Self::meetup_registry(&cindex, &SINGLE_MEETUP_INDEX);
 			for p in meetup_participants {
 				if Self::meetup_participant_count_vote(&cindex, &p) != n_confirmed {
-					print("skipped participant because of wrong participant count vote");
+					print_utf8(b"skipped participant because of wrong participant count vote");
 					continue; }
 				let witnesses = Self::witness_registry(&cindex, 
 					&Self::witness_index(&cindex, &p));
 				if witnesses.len() < (n_honest_participants - 1) as usize || witnesses.is_empty() {
-					print("skipped participant because of too few witnesses");
+					print_utf8(b"skipped participant because of too few witnesses");
 					continue; }
 				let mut has_witnessed = 0u32;
 				for w in witnesses {
@@ -308,11 +310,11 @@ impl<T: Trait> Module<T> {
 					}
 				}
 				if has_witnessed < (n_honest_participants - 1) {
-					print("skipped participant because didn't testify for honest peers");
+					print_utf8(b"skipped participant because didn't testify for honest peers");
 					continue; }					
 				// TODO: check that p also signed others
 				// participant merits reward
-				print("participant merits reward");
+				print_utf8(b"participant merits reward");
 				let old_balance = <balances::Module<T>>::free_balance(&p);
 				let new_balance = old_balance.checked_add(&reward)
 					.expect("Balance should never overflow");
@@ -354,21 +356,19 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 	use crate::encointer_ceremonies;
+	use support::{impl_outer_event, impl_outer_origin, parameter_types, assert_ok};
+	use sr_primitives::{Perbill, traits::{IdentityLookup, BlakeTwo256}, testing::Header};
 	use std::{collections::HashSet, cell::RefCell};
-	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
-	use support::{impl_outer_origin, assert_ok, parameter_types};
+	use externalities::set_and_run_with_externalities;
+	use primitives::{H256, Blake2Hasher, Pair, Public, sr25519};
 	use support::traits::{Currency, Get, FindAuthor, LockIdentifier};
-	use runtime_primitives::{traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header};
-	use runtime_primitives::weights::Weight;
-	use runtime_primitives::Perbill;
+	use sr_primitives::weights::Weight;
 	use node_primitives::{AccountId, Signature};
-		
 	use test_client::{self, AccountKeyring};
 
 	const NONE: u64 = 0;
 	const REWARD: Balance = 1000;
-	
+
 	thread_local! {
 		static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
 	}
@@ -384,29 +384,33 @@ mod tests {
 		}
 	}
 
-	pub type Block = runtime_primitives::generic::Block<Header, UncheckedExtrinsic>;
-	pub type UncheckedExtrinsic = runtime_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
-	// For testing the module, we construct most of a mock runtime. This means
-	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of modules we want to use.
+	#[derive(Clone, PartialEq, Eq, Debug)]
+	pub struct TestRuntime;
+
+	impl Trait for TestRuntime {
+		type Event = ();
+		type Public = <MultiSignature as Verify>::Signer;
+		type Signature = MultiSignature;
+	}
 	
+	pub type EncointerCeremonies = Module<TestRuntime>;
+
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
+		pub const MaximumBlockWeight: u32 = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl system::Trait for Test {
+	impl system::Trait for TestRuntime {
 		type Origin = Origin;
-		type Call = ();
 		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Hashing = BlakeTwo256;
+		type Call = ();
+		type BlockNumber = BlockNumber;
+        type Hash = H256;
+        type Hashing = BlakeTwo256;
 		type AccountId = AccountId;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
@@ -414,65 +418,97 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 	}
+
+	pub type System = system::Module<TestRuntime>;
+
 	parameter_types! {
 		pub const TransferFee: Balance = 0;
 		pub const CreationFee: Balance = 0;
 		pub const TransactionBaseFee: u64 = 0;
 		pub const TransactionByteFee: u64 = 0;
 	}
-	impl balances::Trait for Test {
+	impl balances::Trait for TestRuntime {
 		type Balance = Balance;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type Event = ();
-		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;
-		type TransactionBaseFee = TransactionBaseFee;
-		type TransactionByteFee = TransactionByteFee;
-		type WeightToFee = ();
 	}
+	pub type Balances = balances::Module<TestRuntime>;
 
-	impl Trait for Test {
-		type Event = ();
-		type Signature = Signature;
-	}
+	type AccountPublic = <Signature as Verify>::Signer;
 
-	// in order to test interaction with balances module too, we need a full runtime
-	support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic
-		{
-			System: system::{Module, Call, Event},
-			Balances: balances::{Module, Call, Event<T>, Config<T>, Error},
-			EncointerCeremonies: encointer_ceremonies::{Module, Call, Event<T>, Config<T>, Error},
+	pub struct ExtBuilder;
+
+	impl ExtBuilder {
+		pub fn build() -> runtime_io::TestExternalities {
+			let mut storage = system::GenesisConfig::default().build_storage::<TestRuntime>().unwrap();
+			balances::GenesisConfig::<TestRuntime> {
+				balances: vec![],
+				vesting: vec![],
+			}.assimilate_storage(&mut storage).unwrap();		
+			encointer_ceremonies::GenesisConfig::<TestRuntime> {
+				current_ceremony_index: 1,
+				ceremony_reward: REWARD,
+				ceremony_master: get_accountid(AccountKeyring::Alice),
+			}.assimilate_storage(&mut storage).unwrap();		
+			runtime_io::TestExternalities::from(storage)
 		}
-	);
+	}
 
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		balances::GenesisConfig::<Test> {
-			balances: vec![],
-			vesting: vec![],
-		}.assimilate_storage(&mut t).unwrap();		
-		encointer_ceremonies::GenesisConfig::<Test> {
-			current_ceremony_index: 1,
-			ceremony_reward: REWARD,
-			ceremony_master: AccountKeyring::Alice.public().into(),
-		}.assimilate_storage(&mut t).unwrap();		
-		t.into()		
+	impl_outer_origin!{
+		pub enum Origin for TestRuntime {}
+	}
+
+	fn meetup_claim_sign(claimant: AccountId, witness: AccountKeyring, n_participants: u32) -> TestWitness {
+		let claim = ClaimOfAttendance {
+			claimant_public: claimant.clone(),
+			ceremony_index: 1,
+			meetup_index: SINGLE_MEETUP_INDEX,
+			number_of_participants_confirmed: n_participants,
+		};
+		TestWitness { 
+			claim: claim.clone(),
+			signature: Signature::from(witness.sign(&claim.encode())),
+			public: get_accountid(witness),
+		}
+	}
+
+	fn register_alice_bob_ferdie() {
+		assert_ok!(EncointerCeremonies::register_participant(Origin::signed(get_accountid(AccountKeyring::Alice))));
+		assert_ok!(EncointerCeremonies::register_participant(Origin::signed(get_accountid(AccountKeyring::Bob))));
+		assert_ok!(EncointerCeremonies::register_participant(Origin::signed(get_accountid(AccountKeyring::Ferdie))));
+	}
+
+	fn register_charlie_dave_eve() {
+		assert_ok!(EncointerCeremonies::register_participant(Origin::signed(get_accountid(AccountKeyring::Charlie))));
+		assert_ok!(EncointerCeremonies::register_participant(Origin::signed(get_accountid(AccountKeyring::Dave))));
+		assert_ok!(EncointerCeremonies::register_participant(Origin::signed(get_accountid(AccountKeyring::Eve))));
+	}
+
+	fn gets_witnessed_by(claimant: AccountId, witnesses: Vec<AccountKeyring>, n_participants: u32) {
+		let mut testimonials: Vec<TestWitness> = vec!();
+		for w in witnesses {
+			testimonials.insert(0, 
+				meetup_claim_sign(claimant.clone(), w.clone(), n_participants));
+			
+		}
+		assert_ok!(EncointerCeremonies::register_witnesses(
+				Origin::signed(claimant),
+				testimonials.clone()));	
+	}
+
+	fn get_accountid(pair: AccountKeyring) -> AccountId {
+		AccountPublic::from(pair.public()).into_account()
 	}
 
 	#[test]
 	fn ceremony_phase_statemachine_works() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let master = AccountId::from(AccountKeyring::Alice);
 			assert_eq!(EncointerCeremonies::current_phase(), CeremonyPhaseType::REGISTERING);
 			assert_eq!(EncointerCeremonies::current_ceremony_index(), 1);
@@ -488,7 +524,7 @@ mod tests {
 
 	#[test]
 	fn registering_participant_works() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let alice = AccountId::from(AccountKeyring::Alice);
 			let bob = AccountId::from(AccountKeyring::Bob);
 			let cindex = EncointerCeremonies::current_ceremony_index();
@@ -505,7 +541,7 @@ mod tests {
 
 	#[test]
 	fn registering_participant_twice_fails() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let alice = AccountId::from(AccountKeyring::Alice);
 			assert_ok!(EncointerCeremonies::register_participant(Origin::signed(alice.clone())));
 			assert!(EncointerCeremonies::register_participant(Origin::signed(alice.clone())).is_err());
@@ -514,7 +550,7 @@ mod tests {
 
 	#[test]
 	fn ceremony_index_and_purging_registry_works() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let master = AccountId::from(AccountKeyring::Alice);
 			let alice = AccountId::from(AccountKeyring::Alice);
 			let cindex = EncointerCeremonies::current_ceremony_index();
@@ -538,7 +574,7 @@ mod tests {
 
 	#[test]
 	fn registering_participant_in_wrong_phase_fails() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let master = AccountId::from(AccountKeyring::Alice);
 			let alice = AccountId::from(AccountKeyring::Alice);
 			assert_ok!(EncointerCeremonies::next_phase(Origin::signed(master.clone())));
@@ -549,7 +585,7 @@ mod tests {
 
 	#[test]
 	fn assigning_meetup_works() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let master = AccountId::from(AccountKeyring::Alice);
 			let alice = AccountId::from(AccountKeyring::Alice);
 			let bob = AccountId::from(AccountKeyring::Bob);
@@ -576,7 +612,7 @@ mod tests {
 	}
 	#[test]
 	fn assigning_meetup_at_phase_change_and_purge_works() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let master = AccountId::from(AccountKeyring::Alice);
 			let alice = AccountId::from(AccountKeyring::Alice);
 			let cindex = EncointerCeremonies::current_ceremony_index();
@@ -592,14 +628,14 @@ mod tests {
 
 	#[test]
 	fn verify_witness_signatue_works() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			// claimant			
 			let claimant = AccountKeyring::Alice;
 			// witness
 			let witness = AccountKeyring::Bob;
 
 			let claim = ClaimOfAttendance {
-				claimant_public: claimant.into(),
+				claimant_public: get_accountid(claimant),
 				ceremony_index: 1,
 				meetup_index: SINGLE_MEETUP_INDEX,
 				number_of_participants_confirmed: 3,
@@ -607,17 +643,17 @@ mod tests {
 			let witness_good = TestWitness { 
 				claim: claim.clone(),
 				signature: Signature::from(witness.sign(&claim.encode())),
-				public: witness.into(),
+				public: get_accountid(witness),
 			};
 			let witness_wrong_signature = TestWitness { 
 				claim: claim.clone(),
 				signature: Signature::from(claimant.sign(&claim.encode())),
-				public: witness.into(),
+				public: get_accountid(witness),
 			};
 			let witness_wrong_signer = TestWitness { 
 				claim: claim.clone(),
 				signature: Signature::from(witness.sign(&claim.encode())),
-				public: claimant.into(),
+				public: get_accountid(claimant),
 			};
 			assert_ok!(EncointerCeremonies::verify_witness_signature(witness_good));
 			assert!(EncointerCeremonies::verify_witness_signature(witness_wrong_signature).is_err());
@@ -627,7 +663,7 @@ mod tests {
 
 	#[test]
 	fn register_witnesses_works() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let master = AccountId::from(AccountKeyring::Alice);
 			let alice = AccountKeyring::Alice;
 			let bob = AccountKeyring::Bob;
@@ -637,27 +673,27 @@ mod tests {
 			assert_ok!(EncointerCeremonies::next_phase(Origin::signed(master.clone())));
 			assert_ok!(EncointerCeremonies::next_phase(Origin::signed(master.clone())));
 			// WITNESSING
-			assert_eq!(EncointerCeremonies::meetup_index(&cindex, &alice.into()), SINGLE_MEETUP_INDEX);
+			assert_eq!(EncointerCeremonies::meetup_index(&cindex, &get_accountid(alice)), SINGLE_MEETUP_INDEX);
 
-			gets_witnessed_by(alice.into(), vec!(bob,ferdie),3);
-			gets_witnessed_by(bob.into(), vec!(alice,ferdie),3);
+			gets_witnessed_by(get_accountid(alice), vec!(bob,ferdie),3);
+			gets_witnessed_by(get_accountid(bob), vec!(alice,ferdie),3);
 
 			assert_eq!(EncointerCeremonies::witness_count(), 2);
-			assert_eq!(EncointerCeremonies::witness_index(&cindex, &bob.into()), 2);
+			assert_eq!(EncointerCeremonies::witness_index(&cindex, &get_accountid(bob)), 2);
 			let wit_vec = EncointerCeremonies::witness_registry(&cindex, &2);
 			assert!(wit_vec.len() == 2);
-			assert!(wit_vec.contains(&alice.public()));
-			assert!(wit_vec.contains(&ferdie.public()));
+			assert!(wit_vec.contains(&get_accountid(alice)));
+			assert!(wit_vec.contains(&get_accountid(ferdie)));
 
 			// TEST: re-registering must overwrite previous entry
-			gets_witnessed_by(alice.into(), vec!(bob,ferdie),3);
+			gets_witnessed_by(get_accountid(alice), vec!(bob,ferdie),3);
 			assert_eq!(EncointerCeremonies::witness_count(), 2);	
 		});
 	}
 
 	#[test]
 	fn register_witnesses_for_non_participant_fails_silently() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let master = AccountId::from(AccountKeyring::Alice);
 			let alice = AccountKeyring::Alice;
 			let bob = AccountKeyring::Bob;
@@ -666,10 +702,10 @@ mod tests {
 			assert_ok!(EncointerCeremonies::next_phase(Origin::signed(master.clone())));
 			assert_ok!(EncointerCeremonies::next_phase(Origin::signed(master.clone())));
 			// WITNESSING
-			gets_witnessed_by(alice.into(), vec!(bob,alice),3);
+			gets_witnessed_by(get_accountid(alice), vec!(bob,alice),3);
 			assert_eq!(EncointerCeremonies::witness_count(), 1);	
 			let wit_vec = EncointerCeremonies::witness_registry(&cindex, &1);
-			assert!(wit_vec.contains(&alice.public()) == false);
+			assert!(wit_vec.contains(&get_accountid(alice)) == false);
 			assert!(wit_vec.len() == 1);
 
 		});
@@ -677,7 +713,7 @@ mod tests {
 
 	#[test]
 	fn register_witnesses_for_non_participant_fails() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let master = AccountId::from(AccountKeyring::Alice);
 			let alice = AccountKeyring::Alice;
 			let ferdie = AccountKeyring::Ferdie;
@@ -688,10 +724,10 @@ mod tests {
 			assert_ok!(EncointerCeremonies::next_phase(Origin::signed(master.clone())));
 			// WITNESSING
 			let mut eve_witnesses: Vec<TestWitness> = vec!();
-			eve_witnesses.insert(0, meetup_claim_sign(eve.into(), alice.clone(),3));
-			eve_witnesses.insert(1, meetup_claim_sign(eve.into(), ferdie.clone(),3));
+			eve_witnesses.insert(0, meetup_claim_sign(get_accountid(eve), alice.clone(),3));
+			eve_witnesses.insert(1, meetup_claim_sign(get_accountid(eve), ferdie.clone(),3));
 			assert!(EncointerCeremonies::register_witnesses(
-				Origin::signed(eve.into()),
+				Origin::signed(get_accountid(eve)),
 				eve_witnesses.clone())
 				.is_err());
 
@@ -700,7 +736,7 @@ mod tests {
 
 	#[test]
 	fn register_witnesses_with_non_participant_fails_silently() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let master = AccountId::from(AccountKeyring::Alice);
 			let alice = AccountKeyring::Alice;
 			let bob = AccountKeyring::Bob;
@@ -710,17 +746,17 @@ mod tests {
 			assert_ok!(EncointerCeremonies::next_phase(Origin::signed(master.clone())));
 			assert_ok!(EncointerCeremonies::next_phase(Origin::signed(master.clone())));
 			// WITNESSING
-			gets_witnessed_by(alice.into(), vec!(bob, eve), 3);
+			gets_witnessed_by(get_accountid(alice), vec!(bob, eve), 3);
 			assert_eq!(EncointerCeremonies::witness_count(), 1);	
 			let wit_vec = EncointerCeremonies::witness_registry(&cindex, &1);
-			assert!(wit_vec.contains(&eve.public()) == false);
+			assert!(wit_vec.contains(&get_accountid(eve)) == false);
 			assert!(wit_vec.len() == 1);			
 		});
 	}
 
 	#[test]
 	fn register_witnesses_with_wrong_meetup_index_fails() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let master = AccountId::from(AccountKeyring::Alice);
 			let alice = AccountKeyring::Alice;
 			let bob = AccountKeyring::Bob;
@@ -731,9 +767,9 @@ mod tests {
 			assert_ok!(EncointerCeremonies::next_phase(Origin::signed(master.clone())));
 			// WITNESSING
 			let mut alice_witnesses: Vec<TestWitness> = vec!();
-			alice_witnesses.insert(0, meetup_claim_sign(alice.into(), bob.clone(), 3));
+			alice_witnesses.insert(0, meetup_claim_sign(get_accountid(alice), bob.clone(), 3));
 			let claim = ClaimOfAttendance {
-				claimant_public: alice.into(),
+				claimant_public: get_accountid(alice),
 				ceremony_index: 1,
 				// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 				meetup_index: SINGLE_MEETUP_INDEX + 99,
@@ -743,21 +779,21 @@ mod tests {
 				TestWitness { 
 					claim: claim.clone(),
 					signature: Signature::from(ferdie.sign(&claim.encode())),
-					public: ferdie.into(),
+					public: get_accountid(ferdie),
 				}
 			);
 			assert_ok!(EncointerCeremonies::register_witnesses(
-				Origin::signed(alice.into()),
+				Origin::signed(get_accountid(alice)),
 				alice_witnesses));
 			let wit_vec = EncointerCeremonies::witness_registry(&cindex, &1);
-			assert!(wit_vec.contains(&ferdie.public()) == false);
+			assert!(wit_vec.contains(&get_accountid(ferdie)) == false);
 			assert!(wit_vec.len() == 1);			
 		});
 	}
 
 	#[test]
 	fn register_witnesses_with_wrong_ceremony_index_fails() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let master = AccountId::from(AccountKeyring::Alice);
 			let alice = AccountKeyring::Alice;
 			let bob = AccountKeyring::Bob;
@@ -768,9 +804,9 @@ mod tests {
 			assert_ok!(EncointerCeremonies::next_phase(Origin::signed(master.clone())));
 			// WITNESSING
 			let mut alice_witnesses: Vec<TestWitness> = vec!();
-			alice_witnesses.insert(0, meetup_claim_sign(alice.into(), bob.clone(), 3));
+			alice_witnesses.insert(0, meetup_claim_sign(get_accountid(alice), bob.clone(), 3));
 			let claim = ClaimOfAttendance {
-				claimant_public: alice.into(),
+				claimant_public: get_accountid(alice),
 				// !!!!!!!!!!!!!!!!!!!!!!!!!!
 				ceremony_index: 99,
 				meetup_index: SINGLE_MEETUP_INDEX,
@@ -780,59 +816,22 @@ mod tests {
 				TestWitness { 
 					claim: claim.clone(),
 					signature: Signature::from(ferdie.sign(&claim.encode())),
-					public: ferdie.into(),
+					public: get_accountid(ferdie),
 				}
 			);
 			assert_ok!(EncointerCeremonies::register_witnesses(
-				Origin::signed(alice.into()),
+				Origin::signed(get_accountid(alice)),
 				alice_witnesses));
 			let wit_vec = EncointerCeremonies::witness_registry(&cindex, &1);
-			assert!(wit_vec.contains(&ferdie.public()) == false);
+			assert!(wit_vec.contains(&get_accountid(ferdie)) == false);
 			assert!(wit_vec.len() == 1);			
 		});
 	}
 
-	fn meetup_claim_sign(claimant: AccountId, witness: AccountKeyring, n_participants: u32) -> TestWitness {
-			let claim = ClaimOfAttendance {
-				claimant_public: claimant.clone(),
-				ceremony_index: 1,
-				meetup_index: SINGLE_MEETUP_INDEX,
-				number_of_participants_confirmed: n_participants,
-			};
-			TestWitness { 
-				claim: claim.clone(),
-				signature: Signature::from(witness.sign(&claim.encode())),
-				public: witness.into(),
-			}
-	}
-
-	fn register_alice_bob_ferdie() {
-		assert_ok!(EncointerCeremonies::register_participant(Origin::signed(AccountKeyring::Alice.into())));
-		assert_ok!(EncointerCeremonies::register_participant(Origin::signed(AccountKeyring::Bob.into())));
-		assert_ok!(EncointerCeremonies::register_participant(Origin::signed(AccountKeyring::Ferdie.into())));
-	}
-
-	fn register_charlie_dave_eve() {
-		assert_ok!(EncointerCeremonies::register_participant(Origin::signed(AccountKeyring::Charlie.into())));
-		assert_ok!(EncointerCeremonies::register_participant(Origin::signed(AccountKeyring::Dave.into())));
-		assert_ok!(EncointerCeremonies::register_participant(Origin::signed(AccountKeyring::Eve.into())));
-	}
-
-	fn gets_witnessed_by(claimant: AccountId, witnesses: Vec<AccountKeyring>, n_participants: u32) {
-		let mut testimonials: Vec<TestWitness> = vec!();
-		for w in witnesses {
-			testimonials.insert(0, 
-				meetup_claim_sign(claimant.clone(), w.clone(), n_participants));
-			
-		}
-		assert_ok!(EncointerCeremonies::register_witnesses(
-				Origin::signed(claimant.into()),
-				testimonials.clone()));	
-	}
 
 	#[test]
 	fn ballot_meetup_n_votes_works() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let master = AccountId::from(AccountKeyring::Alice);
 			let alice = AccountKeyring::Alice;
 			let bob = AccountKeyring::Bob;
@@ -848,35 +847,35 @@ mod tests {
 			// ASSIGNING
 			assert_ok!(EncointerCeremonies::next_phase(Origin::signed(master.clone())));
 			// WITNESSING
-			gets_witnessed_by(alice.into(), vec!(bob),5);
-			gets_witnessed_by(bob.into(), vec!(alice),5);
-			gets_witnessed_by(charlie.into(), vec!(alice),5);
-			gets_witnessed_by(dave.into(), vec!(alice),5);
-			gets_witnessed_by(eve.into(), vec!(alice),5);
-			gets_witnessed_by(ferdie.into(), vec!(dave),6);
+			gets_witnessed_by(get_accountid(alice), vec!(bob),5);
+			gets_witnessed_by(get_accountid(bob), vec!(alice),5);
+			gets_witnessed_by(get_accountid(charlie), vec!(alice),5);
+			gets_witnessed_by(get_accountid(dave), vec!(alice),5);
+			gets_witnessed_by(get_accountid(eve), vec!(alice),5);
+			gets_witnessed_by(get_accountid(ferdie), vec!(dave),6);
 			assert!(EncointerCeremonies::ballot_meetup_n_votes(SINGLE_MEETUP_INDEX) == Some((5,5)));
 
-			gets_witnessed_by(alice.into(), vec!(bob),5);
-			gets_witnessed_by(bob.into(), vec!(alice),5);
-			gets_witnessed_by(charlie.into(), vec!(alice),4);
-			gets_witnessed_by(dave.into(), vec!(alice),4);
-			gets_witnessed_by(eve.into(), vec!(alice),6);
-			gets_witnessed_by(ferdie.into(), vec!(dave),6);
+			gets_witnessed_by(get_accountid(alice), vec!(bob),5);
+			gets_witnessed_by(get_accountid(bob), vec!(alice),5);
+			gets_witnessed_by(get_accountid(charlie), vec!(alice),4);
+			gets_witnessed_by(get_accountid(dave), vec!(alice),4);
+			gets_witnessed_by(get_accountid(eve), vec!(alice),6);
+			gets_witnessed_by(get_accountid(ferdie), vec!(dave),6);
 			assert!(EncointerCeremonies::ballot_meetup_n_votes(SINGLE_MEETUP_INDEX) == None);
 
-			gets_witnessed_by(alice.into(), vec!(bob),5);
-			gets_witnessed_by(bob.into(), vec!(alice),5);
-			gets_witnessed_by(charlie.into(), vec!(alice),5);
-			gets_witnessed_by(dave.into(), vec!(alice),4);
-			gets_witnessed_by(eve.into(), vec!(alice),6);
-			gets_witnessed_by(ferdie.into(), vec!(dave),6);
+			gets_witnessed_by(get_accountid(alice), vec!(bob),5);
+			gets_witnessed_by(get_accountid(bob), vec!(alice),5);
+			gets_witnessed_by(get_accountid(charlie), vec!(alice),5);
+			gets_witnessed_by(get_accountid(dave), vec!(alice),4);
+			gets_witnessed_by(get_accountid(eve), vec!(alice),6);
+			gets_witnessed_by(get_accountid(ferdie), vec!(dave),6);
 			assert!(EncointerCeremonies::ballot_meetup_n_votes(SINGLE_MEETUP_INDEX) == Some((5,3)));
 		});
 	}
 
 	#[test]
 	fn issue_reward_works() {
-		with_externalities(&mut new_test_ext(), || {
+		ExtBuilder::build().execute_with(|| {
 			let master = AccountId::from(AccountKeyring::Alice);
 			let alice = AccountKeyring::Alice;
 			let bob = AccountKeyring::Bob;
@@ -896,21 +895,21 @@ mod tests {
 			// eve signs no one else
 			// charlie collects incomplete signatures
 			// dave signs ferdi and reports wrong number of participants
-			gets_witnessed_by(alice.into(), vec!(bob,charlie,dave),5);
-			gets_witnessed_by(bob.into(), vec!(alice,charlie,dave),5);
-			gets_witnessed_by(charlie.into(), vec!(alice,bob),5);
-			gets_witnessed_by(dave.into(), vec!(alice,bob,charlie),6);
-			gets_witnessed_by(eve.into(), vec!(alice,bob,charlie,dave),5);
-			gets_witnessed_by(ferdie.into(), vec!(dave),6);
-			assert_eq!(Balances::free_balance(&alice.into()), 0);
+			gets_witnessed_by(get_accountid(alice), vec!(bob,charlie,dave),5);
+			gets_witnessed_by(get_accountid(bob), vec!(alice,charlie,dave),5);
+			gets_witnessed_by(get_accountid(charlie), vec!(alice,bob),5);
+			gets_witnessed_by(get_accountid(dave), vec!(alice,bob,charlie),6);
+			gets_witnessed_by(get_accountid(eve), vec!(alice,bob,charlie,dave),5);
+			gets_witnessed_by(get_accountid(ferdie), vec!(dave),6);
+			assert_eq!(Balances::free_balance(&get_accountid(alice)), 0);
 
 			assert_ok!(EncointerCeremonies::issue_rewards());
 
-			assert_eq!(Balances::free_balance(&alice.into()), REWARD);
-			assert_eq!(Balances::free_balance(&bob.into()), REWARD);
-			assert_eq!(Balances::free_balance(&charlie.into()), 0);
-			assert_eq!(Balances::free_balance(&eve.into()), 0);
-			assert_eq!(Balances::free_balance(&ferdie.into()), 0);
+			assert_eq!(Balances::free_balance(&get_accountid(alice)), REWARD);
+			assert_eq!(Balances::free_balance(&get_accountid(bob)), REWARD);
+			assert_eq!(Balances::free_balance(&get_accountid(charlie)), 0);
+			assert_eq!(Balances::free_balance(&get_accountid(eve)), 0);
+			assert_eq!(Balances::free_balance(&get_accountid(ferdie)), 0);
 		});
 	}
 }
