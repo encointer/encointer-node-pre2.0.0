@@ -714,7 +714,6 @@ dependencies = [
 name = "encointer-node-runtime"
 version = "4.0.1"
 dependencies = [
- "host_calls 4.0.0",
  "node-primitives 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
  "palette-executive 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
  "palette-support 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
