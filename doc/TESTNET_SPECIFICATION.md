@@ -14,7 +14,7 @@ Interactions of components and usage of SubstraTEE:
     * This testnet shall become a parachain to [Kusama](https://kusama.network/) based on [substrate](https://substrate.dev)
     * no decentralization. The Parachain will feature PoA consensus with Kusama as root-of-trust.
   * no proportional fees. Classical per-transaction base fees will be applied
-  * confidential state updates will be implemented with [SubstraTEE](https://github.com/scs/substraTEE)
+  * confidential state updates will be implemented with [SubstraTEE](https://github.com/scs/substraTEE). For the sake of debugging, enclaves will NOT be run in production mode
   * no private smart contracts yet
   * ceremonies will happen daily at high sun instead of every 41 days.
   
