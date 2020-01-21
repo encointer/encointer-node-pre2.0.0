@@ -22,6 +22,8 @@ These locations are listed in a json file similar to this:
   ]
 }
 ```
+Alternatively, the locations could be specified in [GEOjson (RFC7946) format MultiPoint](https://tools.ietf.org/html/rfc7946#section-3.1.3)
+
 
 The list can be extended by on-chain governance later, but make sure the number of meetup locations is large to get a good randomization. A population of 1M should have in the order of 1M locations for meetups. The more the better.
 
