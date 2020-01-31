@@ -17,6 +17,7 @@ Interactions of components and usage of SubstraTEE:
   * confidential state updates will be implemented with [SubstraTEE](https://github.com/scs/substraTEE). For the sake of debugging, enclaves will NOT be run in production mode
   * no private smart contracts yet
   * ceremonies will happen daily at high sun instead of every 41 days.
+  * No demurrage yet (possibly added later)
   
 ## Validators
 
