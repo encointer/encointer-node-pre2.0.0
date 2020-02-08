@@ -27,6 +27,9 @@ extern crate env_logger;
 
 use keyring::AccountKeyring;
 use keystore::Store;
+use std::path::PathBuf;
+use app_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
+
 use substrate_api_client::{
     Api, node_metadata,
     compose_extrinsic,
@@ -38,13 +41,13 @@ use substrate_api_client::{
 use codec::{Encode, Decode};
 use primitives::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
-	ed25519, sr25519, Pair, Public, H256, hexdisplay::HexDisplay,
+	Pair, sr25519 as sr25519_core, Public, H256, hexdisplay::HexDisplay,
 };
 use bip39::{Mnemonic, Language, MnemonicType};
 
 use encointer_node_runtime::{AccountId, Event, Call, EncointerCeremoniesCall, BalancesCall, 
     Signature, Hash,
-    encointer_ceremonies::{ClaimOfAttendance, Witness, CeremonyIndexType,
+    encointer_ceremonies::{ClaimOfAttendance, Witness, CeremonyIndexType, CeremonyPhaseType,
         MeetupIndexType, ParticipantIndexType, WitnessIndexType}
 }; 
 use sr_primitives::traits::{Verify, IdentifyAccount};
@@ -57,6 +60,8 @@ use std::sync::mpsc::channel;
 use std::collections::HashMap;
 
 type AccountPublic = <Signature as Verify>::Signer;
+const KEYSTORE_PATH: &str = "my_keystore";
+const PREFUNDING_AMOUNT: u128 = 1_000_000_000;
 
 fn main() {
     env_logger::init();
@@ -67,9 +72,6 @@ fn main() {
 	info!("connecting to {}", url);
     let api = Api::<sr25519::Pair>::new(format!("ws://{}", url));
     
-    let keystore_path = "my_keystore";
-	let keystore = Store::open(keystore_path, None).unwrap();
-
     if let Some(_matches) = matches.subcommand_matches("print_metadata") {
         let meta = api.get_metadata();
         println!(
@@ -77,6 +79,64 @@ fn main() {
             node_metadata::pretty_format(&meta).unwrap()
         );
     }
+
+    if let Some(_matches) = matches.subcommand_matches("new_account") {
+        // open store without password protection
+        let store = Store::open(PathBuf::from(&KEYSTORE_PATH), None).unwrap();
+        let key: sr25519::AppPair = store.write().generate().unwrap();
+        drop(store);
+        println!("{}", key.public().to_ss58check())
+    }
+
+    if let Some(_matches) = matches.subcommand_matches("new_claim") {
+        let account = _matches.value_of("account").unwrap();
+        let accountid = get_accountid_from_str(account);
+        let n_participants = _matches.value_of("n_participants").unwrap().parse::<u32>().unwrap();
+        let claim = new_claim_for(&api, accountid, n_participants);
+        println!("{}", hex::encode(claim))
+    }
+
+    if let Some(_matches) = matches.subcommand_matches("sign_claim") {
+        let signer_arg = _matches.value_of("signer").unwrap();
+        info!("first call to get_pair_from_str");
+        let signer = get_pair_from_str(signer_arg);
+        let claim = ClaimOfAttendance::decode(&mut
+            &hex::decode(_matches.value_of("claim").unwrap()).unwrap()[..]).unwrap();
+        let witness = sign_claim(
+            claim,
+            AccountPublic::from(sr25519::Public::from(signer.public())).into_account()
+        );
+        println!("{}", hex::encode(witness))
+    }
+
+
+    if let Some(_matches) = matches.subcommand_matches("fund_account") {
+        let account = _matches.value_of("account").unwrap();
+        let accountid = get_accountid_from_str(account);
+
+        let _api = api.clone().set_signer(AccountKeyring::Alice.pair());
+        let xt = _api.balance_transfer(GenericAddress::from(accountid.clone()), PREFUNDING_AMOUNT);
+        info!("[+] Alice is generous and pre funds account {}\n", accountid.to_ss58check()); 
+        let tx_hash = _api.send_extrinsic(xt.hex_encode()).unwrap();
+        info!("[+] Pre-Funding transaction got finalized. Hash: {:?}\n", tx_hash);
+        let result = _api.get_free_balance(&accountid.clone());
+        println!("balance for {} is now {}", accountid.to_ss58check(), result);
+    }
+
+    if let Some(_matches) = matches.subcommand_matches("list_accounts") {
+        let store = Store::open(PathBuf::from(&KEYSTORE_PATH), None).unwrap();
+        println!("sr25519 keys:");
+        for pubkey in store.read().public_keys::<sr25519::AppPublic>().unwrap().into_iter() {
+            println!("{}",pubkey.to_ss58check());
+        }
+        println!("ed25519 keys:");
+        for pubkey in store.read().public_keys::<ed25519::AppPublic>().unwrap().into_iter() {
+            println!("{}",pubkey.to_ss58check());
+        }
+        drop(store);
+    }
+
+
     if let Some(_matches) = matches.subcommand_matches("listen") {
         info!("Subscribing to events");
         let (events_in, events_out) = channel();
@@ -139,15 +199,20 @@ fn main() {
         println!("balance for {} is {}", account, result);
     }
 
+    if let Some(_matches) = matches.subcommand_matches("get_phase") {
+        let phase = get_current_phase(&api);
+        println!("{:?}", phase);
+    }
+
     if let Some(_matches) = matches.subcommand_matches("transfer") {
         let arg_from = _matches.value_of("from").unwrap();
         let arg_to = _matches.value_of("to").unwrap();
         let amount = u128::from_str_radix(_matches.value_of("amount").unwrap(),10).expect("amount can be converted to u128");
-        let from = get_accountid_from_str(arg_from);
+        let from = get_pair_from_str(arg_from);
         let to = get_accountid_from_str(arg_to);
-        info!("from ss58 is {}", from.to_ss58check());
+        info!("from ss58 is {}", from.public().to_ss58check());
         info!("to ss58 is {}", to.to_ss58check());
-        let _api = api.clone().set_signer(AccountKeyring::from_account_id(&from).unwrap().pair());
+        let _api = api.clone().set_signer(sr25519_core::Pair::from(from));
         let xt = _api.balance_transfer(GenericAddress::from(to.clone()), amount);
         let tx_hash = _api.send_extrinsic(xt.hex_encode()).unwrap();
         println!("[+] Transaction got finalized. Hash: {:?}\n", tx_hash);
@@ -166,16 +231,20 @@ fn main() {
 
         // send and watch extrinsic until finalized
         let tx_hash = _api.send_extrinsic(xt.hex_encode()).unwrap();
-        println!("Transaction got finalized. Phase should've advanced. tx hash: {:?}", tx_hash);       
+        let phase = get_current_phase(&api);
+        println!("Transaction got finalized. Phase is now: {:?}. tx hash: {:?}", phase, tx_hash);       
     }
 
     if let Some(_matches) = matches.subcommand_matches("register_participant") {
-        let account = _matches.value_of("account").unwrap();
-        let accountid = get_accountid_from_str(account);
-        info!("ss58 is {}", accountid.to_ss58check());
-        // FIXME: signer must be participant's Pair. now will always be Alice
-        let _api = api.clone().set_signer(AccountKeyring::Alice.pair());
-
+        let p_arg = _matches.value_of("account").unwrap();
+        let accountid = get_accountid_from_str(p_arg);
+        let p = get_pair_from_str(p_arg);
+        info!("ss58 is {}", p.public().to_ss58check());
+        if (get_current_phase(&api) != CeremonyPhaseType::REGISTERING) {
+            println!("wrong ceremony phase for registering participant");
+            return
+        }
+        let _api = api.clone().set_signer(sr25519_core::Pair::from(p.clone()));
         let xt: UncheckedExtrinsicV4<_>  = compose_extrinsic!(
             _api.clone(),
             "EncointerCeremonies",
@@ -184,9 +253,39 @@ fn main() {
 
         // send and watch extrinsic until finalized
         let tx_hash = _api.send_extrinsic(xt.hex_encode()).unwrap();
+        info!("Transaction got finalized. tx hash: {:?}", tx_hash);       
+        println!("registration finalized: {}", p.public().to_ss58check());
+    }
+
+    if let Some(_matches) = matches.subcommand_matches("register_witnesses") {
+        let p_arg = _matches.value_of("account").unwrap();
+        let signer = get_pair_from_str(p_arg);
+
+        if (get_current_phase(&api) != CeremonyPhaseType::WITNESSING) {
+            println!("wrong ceremony phase for registering participant");
+            return
+        }
+        let witness_args: Vec<_> = _matches.values_of("witness").unwrap().collect();
+        let mut witnesses: Vec<Witness<Signature, AccountId>> = vec![];
+        for arg in witness_args.iter() {
+            let w = Witness::decode(&mut &hex::decode(arg).unwrap()[..]).unwrap();
+            witnesses.push(w);
+        }
+
+        let _api = api.clone().set_signer(sr25519_core::Pair::from(signer));
+        let xt: UncheckedExtrinsicV4<_> = compose_extrinsic!(
+            _api.clone(),
+            "EncointerCeremonies",
+            "register_witnesses",
+            witnesses.clone()
+        );
+        // send and watch extrinsic until finalized
+        let tx_hash = _api.send_extrinsic(xt.hex_encode()).unwrap();
         println!("Transaction got finalized. tx hash: {:?}", tx_hash);       
 
     }
+
+
     if let Some(_matches) = matches.subcommand_matches("list_meetup_registry") {
         let cindex = get_ceremony_index(&api);
         println!("listing meetups for ceremony nr {}", cindex);
@@ -231,7 +330,6 @@ fn main() {
             println!("WitnessRegistry[{}, {} ({})] = {:?}", cindex, w, participants_windex[&w], witnesses);
         }
     }
-
 }
 
 fn get_accountid_from_str(account: &str) -> AccountId {
@@ -240,6 +338,24 @@ fn get_accountid_from_str(account: &str) -> AccountId {
             .unwrap().public()).into_account(),
         _ => AccountPublic::from(sr25519::Public::from_ss58check(account)
             .unwrap()).into_account(),
+    }
+}
+
+// get a pair either form keyring (well known keys) or from the store
+fn get_pair_from_str(account: &str) ->sr25519::AppPair {
+    info!("getting pair for {}", account);
+    match &account[..2] {
+        "//" => sr25519::AppPair::from_string(account, None).unwrap(),
+        _ => {
+            info!("fetching from keystore at {}", &KEYSTORE_PATH);
+            // open store without password protection
+            let store = Store::open(PathBuf::from(&KEYSTORE_PATH), None).expect("store should exist");
+            info!("store opened");
+            let _pair = store.read().key_pair::<sr25519::AppPair>(&sr25519::Public::from_ss58check(account).unwrap().into()).unwrap();
+            drop(store);
+            _pair
+        }
+            
     }
 }
 
@@ -270,6 +386,13 @@ fn get_witness_count(api: &Api<sr25519::Pair>) -> ParticipantIndexType {
             ).unwrap() as ParticipantIndexType
 }
 
+fn get_current_phase(api: &Api<sr25519::Pair>) -> CeremonyPhaseType {
+    let result_str = api
+        .get_storage("EncointerCeremonies", "CurrentPhase", None)
+        .unwrap();
+    CeremonyPhaseType::decode(&mut &hexstr_to_vec(result_str).unwrap()[..]).unwrap()
+}
+
 fn get_participant(
     api: &Api<sr25519::Pair>, 
     cindex: CeremonyIndexType, 
@@ -286,6 +409,32 @@ fn get_participant(
             Some(accountid)
         }
     }
+}
+
+fn get_participant_index(
+    api: &Api<sr25519::Pair>, 
+    cindex: CeremonyIndexType, 
+    account: &AccountId
+    ) -> Option<ParticipantIndexType> 
+{
+    let res = hexstr_to_u64(api
+        .get_storage_double_map("EncointerCeremonies", "ParticipantIndex", 
+            cindex.encode(), (*account).encode()).unwrap()).unwrap();
+    info!("got participant index for {}: {}", account.to_ss58check(), res);
+    Some(res)
+}
+
+fn get_meetup_index_for(
+    api: &Api<sr25519::Pair>, 
+    cindex: CeremonyIndexType, 
+    account: &AccountId
+    ) -> Option<MeetupIndexType> 
+{
+    let res = hexstr_to_u64(api
+        .get_storage_double_map("EncointerCeremonies", "MeetupIndex", 
+            cindex.encode(), (*account).encode()).unwrap()).unwrap();
+    info!("got meetup index for {}: {}", (*account).to_ss58check(), res);
+    Some(res)
 }
 
 fn get_meetup_participants(
@@ -344,6 +493,35 @@ fn get_participant_witness_index(
     }
 }
 
+fn new_claim_for(
+    api: &Api<sr25519::Pair>, 
+    accountid: AccountId,
+    n_participants: u32,
+) -> Vec<u8> {
+    let cindex = get_ceremony_index(api);
+    let mindex = get_meetup_index_for(api,cindex,&accountid).unwrap();
+    let claim = ClaimOfAttendance::<AccountId> {
+		claimant_public: accountid,
+        ceremony_index: cindex,
+        meetup_index: mindex,
+        number_of_participants_confirmed: n_participants,
+    };
+    claim.encode()
+}
+
+fn sign_claim(
+    claim: ClaimOfAttendance<AccountId>,
+    accountid: AccountId,
+) -> Vec<u8> {
+    info!("second call to get_pair_from_str");
+    let pair = get_pair_from_str(&accountid.to_ss58check());
+    let witness = Witness { 
+        claim: claim.clone(),
+        signature: Signature::from(sr25519_core::Signature::from(pair.sign(&claim.encode()))),
+        public: accountid,
+    };
+    witness.encode()
+}
 
 
 

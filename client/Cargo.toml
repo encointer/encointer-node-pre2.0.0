@@ -4,13 +4,11 @@ version = "0.1.0"
 authors = ["encointer.org <alain@encointer.org>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-substrate-api-client = { git = "https://github.com/scs/substrate-api-client.git", tag = "api-M1.5"}
+substrate-api-client = { git = "https://github.com/scs/substrate-api-client.git"}
 log = "0.4"
-env_logger = "0.6"
-hex = "0.3.2"
+env_logger = "0.7"
+hex = "0.4"
 json = "0.12.0"
 substrate-bip39 = "0.3.1"
 tiny-bip39 = "0.6.2"
@@ -64,5 +62,10 @@ git = 'https://github.com/paritytech/substrate'
 rev = "3bf9540e72df5ecb3955845764dfee7dcdbb26b5"
 package = "substrate-keyring"
 
-[patch.crates-io]
-ed25519-dalek = { git = "https://github.com/scs/ed25519-dalek.git", branch = "no_std_sgx"}
+[dependencies.app-crypto]
+git = "https://github.com/paritytech/substrate"
+rev = "3bf9540e72df5ecb3955845764dfee7dcdbb26b5"
+package = "substrate-application-crypto"
+
+#[patch.crates-io]
+#ed25519-dalek = { git = "https://github.com/scs/ed25519-dalek.git", branch = "no_std_sgx"}

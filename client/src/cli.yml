@@ -21,6 +21,8 @@ args:
 subcommands:
     - next_phase:
         about: Advance ceremony state machine to next phase by ROOT call
+    - get_phase:
+        about: read current ceremony phase from chain
     - get_balance:
         about: get balance for account
         settings:
@@ -39,6 +41,38 @@ subcommands:
                 index: 1
     - new_account:
         about: generate new account and store it in keystore
+        settings:
+            - ColoredHelp
+    - new_claim:
+        about: generate a new claim for meetup
+        settings:
+            - ColoredHelp
+        args:
+            - account:
+                required: true
+                index: 1
+            - n_participants:
+                required: true
+                index: 2     
+    - sign_claim:
+        about: attest another participants attendance by signing her claim
+        args:
+            - signer:
+                required: true
+                index: 1               
+            - claim:
+                required: true
+                index: 2
+    - fund_account:
+        about: Alice will pre-fund this new account
+        settings:
+            - ColoredHelp
+        args:
+            - account:
+                required: true
+                index: 1
+    - list_accounts:
+        about: list all accounts in the keystore
         settings:
             - ColoredHelp
     - listen:
@@ -65,5 +99,15 @@ subcommands:
         about: query entire participant registry 
     - list_witnesses_registry:
         about: query entire witnesses registry 
+    - register_witnesses:
+        about: send attestations for other participants to the chain
+        args:
+            - account:
+                required: true
+                index: 1
+            - witness:
+                required: true
+                multiple: true
+                min_values: 1
 
  
