@@ -4,6 +4,11 @@ version = "4.0.1"
 authors = ["encointer.org <alain@encointer.org>"]
 edition = "2018"
 
+[dependencies.encointer-ceremonies]
+default-features = false
+git = "https://github.com/encointer/pallet-encointer-ceremonies"
+package = "pallet-encointer-ceremonies"
+
 [dependencies.aura]
 default-features = false
 git = "https://github.com/paritytech/substrate"
@@ -87,6 +92,8 @@ default-features = false
 git = "https://github.com/paritytech/substrate"
 package = "sr-io"
 rev = "3bf9540e72df5ecb3955845764dfee7dcdbb26b5"
+#FIXME: this should not be necessary
+features = ["disable_oom", "disable_panic_handler"]
 
 [dependencies.safe-mix]
 default-features = false
@@ -210,5 +217,6 @@ std = [
 	"transaction-payment/std",
 	"tx-pool-api/std",
 	"version/std",
+	"encointer-ceremonies/std",
 #	"host_calls/std",
 ]
