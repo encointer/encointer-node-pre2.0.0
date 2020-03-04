@@ -171,11 +171,6 @@ git = "https://github.com/paritytech/substrate"
 package = "sr-version"
 rev = "3bf9540e72df5ecb3955845764dfee7dcdbb26b5"
 
-# added by SCS
-#[dependencies.host_calls]
-#default-features = false
-#path = "../host_calls"
-
 [dev-dependencies.node-primitives]
 default-features = false
 git = "https://github.com/paritytech/substrate"
@@ -226,5 +221,6 @@ std = [
 	"tx-pool-api/std",
 	"version/std",
 	"encointer-ceremonies/std",
-#	"host_calls/std",
+	"encointer-currencies/std",
+	"encointer-currencies-host-calls/std",
 ]

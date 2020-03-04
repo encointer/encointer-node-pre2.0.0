@@ -4,7 +4,7 @@
 use primitives::{Pair, Public, sr25519};
 use encointer_node_runtime::{
     AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, IndicesConfig, SudoConfig,
-    SystemConfig, WASM_BINARY, EncointerCeremoniesConfig, CeremonyPhaseType, Signature};
+    SystemConfig, WASM_BINARY, EncointerCeremoniesConfig, EncointerCurrenciesConfig, CeremonyPhaseType, Signature};
 use aura_primitives::sr25519::{AuthorityId as AuraId};
 use grandpa_primitives::{AuthorityId as GrandpaId};
 use substrate_service;
@@ -147,6 +147,9 @@ fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>,
             current_ceremony_index: 1,
             ceremony_reward: 1_000_000,
             ceremony_master: get_account_id_from_seed::<sr25519::Public>("Alice"),
+		}),
+		encointer_currencies: Some(EncointerCurrenciesConfig {
+            currency_master: get_account_id_from_seed::<sr25519::Public>("Alice"),
         }),
 	}
 }

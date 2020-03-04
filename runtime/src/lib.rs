@@ -36,6 +36,7 @@ pub use support::{StorageValue, construct_runtime, parameter_types, traits::Rand
 
 //pub use substratee_registry::Call as SubstraTEERegistryCall;
 pub use encointer_ceremonies::Call as EncointerCeremoniesCall;
+pub use encointer_currencies::Call as EncointerCurrenciesCall;
 
 pub use encointer_ceremonies::CeremonyPhaseType;
 
@@ -245,6 +246,10 @@ impl encointer_ceremonies::Trait for Runtime {
 	type Signature = MultiSignature;
 }
 
+impl encointer_currencies::Trait for Runtime {
+	type Event = Event;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -261,6 +266,7 @@ construct_runtime!(
 		Sudo: sudo,
 //        SubstraTEERegistry: substratee_registry::{Module, Call, Storage, Event<T>},
 		EncointerCeremonies: encointer_ceremonies::{Module, Call, Storage, Config<T>, Event<T>},
+		EncointerCurrencies: encointer_currencies::{Module, Call, Storage, Config<T>, Event<T>},
 		RandomnessCollectiveFlip: randomness_collective_flip::{Module, Call, Storage},
 	}
 );

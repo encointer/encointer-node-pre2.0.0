@@ -22,7 +22,7 @@ native_executor_instance!(
 	pub Executor,
 	encointer_node_runtime::api::dispatch,
 	encointer_node_runtime::native_version,
-	// Added by SCS
+	// Added by encointer
 	runtime_interfaces::HostFunctions
 );
 
