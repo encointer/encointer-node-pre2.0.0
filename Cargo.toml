@@ -7,7 +7,6 @@ edition = "2018"
 
 [workspace]
 members = [
-    "host_calls",
     "runtime",
     "client"
 ]
@@ -101,9 +100,6 @@ git = "https://github.com/paritytech/substrate"
 package = "substrate-basic-authorship"
 rev = "3bf9540e72df5ecb3955845764dfee7dcdbb26b5"
 
-[dependencies.host_calls]
-path = "host_calls"
-
 [build-dependencies]
 vergen = "3.0.4"
 
@@ -111,3 +107,7 @@ vergen = "3.0.4"
 git = "https://github.com/paritytech/substrate"
 package = "substrate-build-script-utils"
 rev = "3bf9540e72df5ecb3955845764dfee7dcdbb26b5"
+
+#only while debugging
+[patch."https://github.com/encointer/pallet-encointer-ceremonies"]
+pallet-encointer-ceremonies = { path = "../pallet-encointer-ceremonies" }

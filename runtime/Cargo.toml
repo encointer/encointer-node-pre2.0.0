@@ -92,8 +92,6 @@ default-features = false
 git = "https://github.com/paritytech/substrate"
 package = "sr-io"
 rev = "3bf9540e72df5ecb3955845764dfee7dcdbb26b5"
-#FIXME: this should not be necessary
-features = ["disable_oom", "disable_panic_handler"]
 
 [dependencies.safe-mix]
 default-features = false
