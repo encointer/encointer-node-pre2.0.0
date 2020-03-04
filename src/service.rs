@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use substrate_client::LongestChain;
 use encointer_node_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
-use host_calls::runtime_interfaces;
+use encointer_currencies_host_calls::runtime_interfaces;
 use substrate_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;

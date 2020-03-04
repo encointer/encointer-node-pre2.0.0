@@ -9,6 +9,16 @@ default-features = false
 git = "https://github.com/encointer/pallet-encointer-ceremonies"
 package = "pallet-encointer-ceremonies"
 
+[dependencies.encointer-currencies]
+default-features = false
+git = "https://github.com/encointer/pallet-encointer-currencies"
+package = "pallet-encointer-currencies"
+
+[dependencies.encointer-currencies-host-calls]
+default-features = false
+package="encointer-currencies-host-calls"
+git = "https://github.com/encointer/pallet-encointer-currencies"
+
 [dependencies.aura]
 default-features = false
 git = "https://github.com/paritytech/substrate"
