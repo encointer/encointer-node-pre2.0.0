@@ -4,7 +4,7 @@
 use primitives::{Pair, Public, sr25519};
 use encointer_node_runtime::{
     AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, IndicesConfig, SudoConfig,
-    SystemConfig, WASM_BINARY, EncointerCeremoniesConfig, EncointerCurrenciesConfig, CeremonyPhaseType, Signature};
+    SystemConfig, WASM_BINARY, EncointerCeremoniesConfig, EncointerCurrenciesConfig, Signature};
 use aura_primitives::sr25519::{AuthorityId as AuraId};
 use grandpa_primitives::{AuthorityId as GrandpaId};
 use substrate_service;
