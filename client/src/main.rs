@@ -110,11 +110,11 @@ fn main() {
         let signer = get_pair_from_str(signer_arg);
         let claim = ClaimOfAttendance::decode(&mut
             &hex::decode(_matches.value_of("claim").unwrap()).unwrap()[..]).unwrap();
-        let witness = sign_claim(
+        let attestation = sign_claim(
             claim,
             AccountPublic::from(sr25519::Public::from(signer.public())).into_account()
         );
-        println!("{}", hex::encode(witness))
+        println!("{}", hex::encode(attestation))
     }
 
 
@@ -247,6 +247,9 @@ fn main() {
         let p_arg = _matches.value_of("account").unwrap();
         let accountid = get_accountid_from_str(p_arg);
         let p = get_pair_from_str(p_arg);
+        let cid = get_cid(_matches.value_of("cid").unwrap());
+        // FIXME:
+        let proof = None;
         info!("ss58 is {}", p.public().to_ss58check());
         if (get_current_phase(&api) != CeremonyPhaseType::REGISTERING) {
             println!("wrong ceremony phase for registering participant");
@@ -256,7 +259,9 @@ fn main() {
         let xt: UncheckedExtrinsicV4<_>  = compose_extrinsic!(
             _api.clone(),
             "EncointerCeremonies",
-            "register_participant"
+            "register_participant",
+            cid,
+            proof
         );
 
         // send and watch extrinsic until finalized
@@ -265,7 +270,7 @@ fn main() {
         println!("registration finalized: {}", p.public().to_ss58check());
     }
 
-    if let Some(_matches) = matches.subcommand_matches("register_witnesses") {
+    if let Some(_matches) = matches.subcommand_matches("register_attestations") {
         let p_arg = _matches.value_of("account").unwrap();
         let signer = get_pair_from_str(p_arg);
 
@@ -273,19 +278,20 @@ fn main() {
             println!("wrong ceremony phase for registering participant");
             return
         }
-        let witness_args: Vec<_> = _matches.values_of("witness").unwrap().collect();
-        let mut witnesses: Vec<Attestation<Signature, AccountId>> = vec![];
-        for arg in witness_args.iter() {
+        let attestation_args: Vec<_> = _matches.values_of("attestation").unwrap().collect();
+        let mut attestations: Vec<Attestation<Signature, AccountId>> = vec![];
+        for arg in attestation_args.iter() {
             let w = Attestation::decode(&mut &hex::decode(arg).unwrap()[..]).unwrap();
-            witnesses.push(w);
+            attestations.push(w);
         }
+        let cid = get_cid(_matches.value_of("cid").unwrap());
 
         let _api = api.clone().set_signer(sr25519_core::Pair::from(signer));
         let xt: UncheckedExtrinsicV4<_> = compose_extrinsic!(
             _api.clone(),
             "EncointerCeremonies",
-            "register_witnesses",
-            witnesses.clone()
+            "register_attestations",
+            attestations.clone()
         );
         // send and watch extrinsic until finalized
         let tx_hash = _api.send_extrinsic(xt.hex_encode()).unwrap();
@@ -317,25 +323,25 @@ fn main() {
         }
     }
 
-    if let Some(_matches) = matches.subcommand_matches("list_witnesses_registry") {
+    if let Some(_matches) = matches.subcommand_matches("list_attestations_registry") {
         let cindex = get_ceremony_index(&api);
-        println!("listing witnesses for ceremony nr {}", cindex);
-        let wcount = get_witness_count(&api);
-        println!("number of witnesses testimonials:  {}", wcount);
+        println!("listing attestations for ceremony nr {}", cindex);
+        let wcount = get_attestation_count(&api);
+        println!("number of attestations:  {}", wcount);
         let pcount = get_participant_count(&api);
 
         let mut participants_windex = HashMap::new();
         for p in 1..pcount+1 {
             let accountid = get_participant(&api, cindex, p)
                 .expect("error getting participant");
-            match get_participant_witness_index(&api, cindex, &accountid) {
+            match get_participant_attestation_index(&api, cindex, &accountid) {
                 Some(windex) => participants_windex.insert(windex as AttestationIndexType, accountid),
                 _ => continue,
             };
         }
         for w in 1..wcount+1 {
-            let witnesses = get_witnesses(&api, cindex, w);
-            println!("AttestationRegistry[{}, {} ({})] = {:?}", cindex, w, participants_windex[&w], witnesses);
+            let attestations = get_attestations(&api, cindex, w);
+            println!("AttestationRegistry[{}, {} ({})] = {:?}", cindex, w, participants_windex[&w], attestations);
         }
     }
 
@@ -443,7 +449,7 @@ fn get_participant_count(api: &Api<sr25519::Pair>) -> ParticipantIndexType {
             .unwrap()
             ).unwrap() as ParticipantIndexType
 }
-fn get_witness_count(api: &Api<sr25519::Pair>) -> ParticipantIndexType {
+fn get_attestation_count(api: &Api<sr25519::Pair>) -> ParticipantIndexType {
     hexstr_to_u64(api
             .get_storage("EncointerCeremonies", "AttestationCount", None)
             .unwrap()
@@ -519,7 +525,7 @@ fn get_meetup_participants(
     }
 }
 
-fn get_witnesses(
+fn get_attestations(
     api: &Api<sr25519::Pair>, 
     cindex: CeremonyIndexType, 
     windex: ParticipantIndexType, 
@@ -531,13 +537,13 @@ fn get_witnesses(
     match res.as_str() {
         "null" => None,
         _ => {
-            let witnesses: Vec<AccountId> = Decode::decode(&mut &hexstr_to_vec(res).unwrap()[..]).unwrap();
-            Some(witnesses)
+            let attestations: Vec<AccountId> = Decode::decode(&mut &hexstr_to_vec(res).unwrap()[..]).unwrap();
+            Some(attestations)
         }
     }
 }
 
-fn get_participant_witness_index(
+fn get_participant_attestation_index(
     api: &Api<sr25519::Pair>, 
     cindex: CeremonyIndexType,
     accountid: &AccountId
@@ -581,12 +587,12 @@ fn sign_claim(
 ) -> Vec<u8> {
     info!("second call to get_pair_from_str");
     let pair = get_pair_from_str(&accountid.to_ss58check());
-    let witness = Attestation { 
+    let attestation = Attestation { 
         claim: claim.clone(),
         signature: Signature::from(sr25519_core::Signature::from(pair.sign(&claim.encode()))),
         public: accountid,
     };
-    witness.encode()
+    attestation.encode()
 }
 
 

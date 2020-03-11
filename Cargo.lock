@@ -669,7 +669,7 @@ dependencies = [
 [[package]]
 name = "encointer-currencies-host-calls"
 version = "0.1.0"
-source = "git+https://github.com/encointer/pallet-encointer-currencies#ed8aad9d6dda0cf8287a23bf2b0481ac5c07a6b0"
+source = "git+https://github.com/encointer/pallet-encointer-currencies#486692c629b00f803104581d58f1e2553db47020"
 dependencies = [
  "env_logger 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "geo 0.12.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2558,7 +2558,7 @@ dependencies = [
 [[package]]
 name = "pallet-encointer-currencies"
 version = "0.1.0"
-source = "git+https://github.com/encointer/pallet-encointer-currencies#ed8aad9d6dda0cf8287a23bf2b0481ac5c07a6b0"
+source = "git+https://github.com/encointer/pallet-encointer-currencies#486692c629b00f803104581d58f1e2553db47020"
 dependencies = [
  "encointer-currencies-host-calls 0.1.0 (git+https://github.com/encointer/pallet-encointer-currencies)",
  "palette-support 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
@@ -5182,7 +5182,7 @@ name = "twox-hash"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.3.23 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
