@@ -39,6 +39,17 @@ subcommands:
             - account:
                 required: true
                 index: 1
+    - new_currency:
+        about: register a new currency
+        settings:
+            - ColoredHelp
+        args:
+            - specfile:
+                required: true
+                index: 1
+            - signer:
+                required: true
+                index: 2
     - new_account:
         about: generate new account and store it in keystore
         settings:
@@ -51,9 +62,12 @@ subcommands:
             - account:
                 required: true
                 index: 1
-            - n_participants:
+            - cid:
                 required: true
                 index: 2     
+            - n_participants:
+                required: true
+                index: 3     
     - sign_claim:
         about: attest another participants attendance by signing her claim
         args:

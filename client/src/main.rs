@@ -41,15 +41,18 @@ use substrate_api_client::{
 use codec::{Encode, Decode};
 use primitives::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
-	Pair, sr25519 as sr25519_core, Public, H256, hexdisplay::HexDisplay,
+    Pair, sr25519 as sr25519_core, Public, H256, hexdisplay::HexDisplay,
+    hashing::blake2_256
 };
 use bip39::{Mnemonic, Language, MnemonicType};
 
 use encointer_node_runtime::{AccountId, Event, Call, EncointerCeremoniesCall, BalancesCall, 
-    Signature, Hash,
-    encointer_ceremonies::{ClaimOfAttendance, Witness, CeremonyIndexType, CeremonyPhaseType,
-        MeetupIndexType, ParticipantIndexType, WitnessIndexType}
-}; 
+    Signature, Hash,};
+use encointer_ceremonies::{ClaimOfAttendance, Attestation, CeremonyIndexType, CeremonyPhaseType,
+    MeetupIndexType, ParticipantIndexType, AttestationIndexType}; 
+use encointer_currencies::{CurrencyIdentifier, Location};
+use base58::{FromBase58, ToBase58};
+
 use sr_primitives::traits::{Verify, IdentifyAccount};
 //use primitive_types::U256;
 use serde_json;
@@ -58,6 +61,8 @@ use log::Level;
 use clap::App;
 use std::sync::mpsc::channel;
 use std::collections::HashMap;
+use geojson::GeoJson;
+use std::fs;
 
 type AccountPublic = <Signature as Verify>::Signer;
 const KEYSTORE_PATH: &str = "my_keystore";
@@ -91,8 +96,11 @@ fn main() {
     if let Some(_matches) = matches.subcommand_matches("new_claim") {
         let account = _matches.value_of("account").unwrap();
         let accountid = get_accountid_from_str(account);
+        let cid = get_cid(_matches.value_of("cid").unwrap());
+        // FIXME: supply arg
+        //let cid = CurrencyIdentifier::default();
         let n_participants = _matches.value_of("n_participants").unwrap().parse::<u32>().unwrap();
-        let claim = new_claim_for(&api, accountid, n_participants);
+        let claim = new_claim_for(&api, accountid, cid, n_participants);
         println!("{}", hex::encode(claim))
     }
 
@@ -168,10 +176,10 @@ fn main() {
                             Event::encointer_ceremonies(ee) => {
                                 println!(">>>>>>>>>> ceremony event: {:?}", ee);
                                 match &ee {
-                                    encointer_node_runtime::encointer_ceremonies::RawEvent::PhaseChangedTo(phase) => {
+                                    encointer_ceremonies::RawEvent::PhaseChangedTo(phase) => {
                                         println!("Phase changed to: {:?}", phase);
                                     },
-                                    encointer_node_runtime::encointer_ceremonies::RawEvent::ParticipantRegistered(accountid) => {
+                                    encointer_ceremonies::RawEvent::ParticipantRegistered(accountid) => {
                                         println!("Participant registered for ceremony: {:?}", accountid);
                                     },
                                     _ => {
@@ -261,14 +269,14 @@ fn main() {
         let p_arg = _matches.value_of("account").unwrap();
         let signer = get_pair_from_str(p_arg);
 
-        if (get_current_phase(&api) != CeremonyPhaseType::WITNESSING) {
+        if (get_current_phase(&api) != CeremonyPhaseType::ATTESTING) {
             println!("wrong ceremony phase for registering participant");
             return
         }
         let witness_args: Vec<_> = _matches.values_of("witness").unwrap().collect();
-        let mut witnesses: Vec<Witness<Signature, AccountId>> = vec![];
+        let mut witnesses: Vec<Attestation<Signature, AccountId>> = vec![];
         for arg in witness_args.iter() {
-            let w = Witness::decode(&mut &hex::decode(arg).unwrap()[..]).unwrap();
+            let w = Attestation::decode(&mut &hex::decode(arg).unwrap()[..]).unwrap();
             witnesses.push(w);
         }
 
@@ -321,18 +329,74 @@ fn main() {
             let accountid = get_participant(&api, cindex, p)
                 .expect("error getting participant");
             match get_participant_witness_index(&api, cindex, &accountid) {
-                Some(windex) => participants_windex.insert(windex as WitnessIndexType, accountid),
+                Some(windex) => participants_windex.insert(windex as AttestationIndexType, accountid),
                 _ => continue,
             };
         }
         for w in 1..wcount+1 {
             let witnesses = get_witnesses(&api, cindex, w);
-            println!("WitnessRegistry[{}, {} ({})] = {:?}", cindex, w, participants_windex[&w], witnesses);
+            println!("AttestationRegistry[{}, {} ({})] = {:?}", cindex, w, participants_windex[&w], witnesses);
         }
+    }
+
+    if let Some(_matches) = matches.subcommand_matches("new_currency") {
+        let p_arg = _matches.value_of("signer").unwrap();
+        let signer = get_pair_from_str(p_arg);
+        
+        let spec_file = _matches.value_of("specfile").unwrap();
+        
+        let spec_str = fs::read_to_string(spec_file).unwrap();
+        let geoloc = spec_str.parse::<GeoJson>().unwrap();
+        
+        let mut loc = Vec::with_capacity(100);
+        match geoloc {
+            GeoJson::FeatureCollection(ref ctn) => for feature in &ctn.features {
+                let val = &feature.geometry.as_ref().unwrap().value;
+                if let geojson::Value::Point(pt) = val {
+                    let l = Location { 
+                        lon: (pt[0]*1000000.0).round() as i32, 
+                        lat: (pt[1]*1000000.0).round() as i32
+                    };
+                    loc.push(l);
+                    debug!("lon: {} lat {} => {:?}", pt[0], pt[1], l);
+                }
+            },
+            _ => ()
+        };
+        let meta: serde_json::Value = serde_json::from_str(&spec_str).unwrap();
+        debug!("meta: {:?}", meta["currency_meta"]);
+        let bootstrappers: Vec<AccountId> = meta["currency_meta"]["bootstrappers"]
+            .as_array().expect("bootstrappers must be array")
+            .iter()
+            .map(|a| get_accountid_from_str(&a.as_str().unwrap()))
+            .collect();
+       
+        let cid = blake2_256(&(loc.clone(), bootstrappers.clone()).encode());
+        let name = meta["currency_meta"]["name"].as_str().unwrap();
+        info!("bootstrappers: {:?}", bootstrappers);
+        info!("name: {}", name);
+        info!("Currency registered by {}", signer.public().to_ss58check());
+
+        let _api = api.clone().set_signer(sr25519_core::Pair::from(signer));
+        let xt: UncheckedExtrinsicV4<_> = compose_extrinsic!(
+            _api.clone(),
+            "EncointerCurrencies",
+            "new_currency",
+            loc,
+            bootstrappers
+        );
+        let tx_hash = _api.send_extrinsic(xt.hex_encode()).unwrap();
+        info!("[+] Transaction got finalized. Hash: {:?}\n", tx_hash);
+        println!("{}", cid.to_base58())
     }
 }
 
+fn get_cid(cid: &str) -> CurrencyIdentifier {
+    CurrencyIdentifier::decode(&mut &cid.from_base58().unwrap()[..]).unwrap()
+}
+
 fn get_accountid_from_str(account: &str) -> AccountId {
+    info!("getting AccountId from -{}-", account);
     match &account[..2] {
         "//" => AccountPublic::from(sr25519::Pair::from_string(account, None)
             .unwrap().public()).into_account(),
@@ -381,7 +445,7 @@ fn get_participant_count(api: &Api<sr25519::Pair>) -> ParticipantIndexType {
 }
 fn get_witness_count(api: &Api<sr25519::Pair>) -> ParticipantIndexType {
     hexstr_to_u64(api
-            .get_storage("EncointerCeremonies", "WitnessCount", None)
+            .get_storage("EncointerCeremonies", "AttestationCount", None)
             .unwrap()
             ).unwrap() as ParticipantIndexType
 }
@@ -462,7 +526,7 @@ fn get_witnesses(
     ) -> Option<Vec<AccountId>> 
 {
     let res = api
-        .get_storage_double_map("EncointerCeremonies", "WitnessRegistry", 
+        .get_storage_double_map("EncointerCeremonies", "AttestationRegistry", 
             cindex.encode(), windex.encode()).unwrap();
     match res.as_str() {
         "null" => None,
@@ -480,7 +544,7 @@ fn get_participant_witness_index(
     ) -> Option<ParticipantIndexType> 
 {
 
-    let res = api.get_storage_double_map("EncointerCeremonies", "WitnessIndex", 
+    let res = api.get_storage_double_map("EncointerCeremonies", "AttestationIndex", 
             cindex.encode(), accountid.encode()).unwrap();
     match res.as_str() {
         "null" => None,
@@ -496,12 +560,14 @@ fn get_participant_witness_index(
 fn new_claim_for(
     api: &Api<sr25519::Pair>, 
     accountid: AccountId,
+    cid: CurrencyIdentifier,
     n_participants: u32,
 ) -> Vec<u8> {
     let cindex = get_ceremony_index(api);
     let mindex = get_meetup_index_for(api,cindex,&accountid).unwrap();
     let claim = ClaimOfAttendance::<AccountId> {
-		claimant_public: accountid,
+        claimant_public: accountid,
+        currency_identifier: cid,
         ceremony_index: cindex,
         meetup_index: mindex,
         number_of_participants_confirmed: n_participants,
@@ -515,7 +581,7 @@ fn sign_claim(
 ) -> Vec<u8> {
     info!("second call to get_pair_from_str");
     let pair = get_pair_from_str(&accountid.to_ss58check());
-    let witness = Witness { 
+    let witness = Attestation { 
         claim: claim.clone(),
         signature: Signature::from(sr25519_core::Signature::from(pair.sign(&claim.encode()))),
         public: accountid,

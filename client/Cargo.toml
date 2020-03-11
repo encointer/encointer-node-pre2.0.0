@@ -15,6 +15,18 @@ tiny-bip39 = "0.6.2"
 serde_json      = { version = "1.0"}
 clap            = { version = "2.33", features = [ "yaml" ] }
 primitive-types = { version = "0.6.1", default-features = false, features = ["codec"] }
+geojson = "0.17"
+base58  = "0.1"
+
+[dependencies.encointer-ceremonies]
+default-features = false
+git = "https://github.com/encointer/pallet-encointer-ceremonies"
+package = "pallet-encointer-ceremonies"
+
+[dependencies.encointer-currencies]
+default-features = false
+git = "https://github.com/encointer/pallet-encointer-currencies"
+package = "pallet-encointer-currencies"
 
 [dependencies.serde]
 features = ["derive"]
