@@ -49,7 +49,7 @@ use bip39::{Mnemonic, Language, MnemonicType};
 use encointer_node_runtime::{AccountId, Event, Call, EncointerCeremoniesCall, BalancesCall, 
     Signature, Hash,};
 use encointer_ceremonies::{ClaimOfAttendance, Attestation, CeremonyIndexType, CeremonyPhaseType,
-    MeetupIndexType, ParticipantIndexType, AttestationIndexType}; 
+    MeetupIndexType, ParticipantIndexType, AttestationIndexType, ProofOfAttendance, CurrencyCeremony}; 
 use encointer_currencies::{CurrencyIdentifier, Location};
 use base58::{FromBase58, ToBase58};
 
@@ -96,7 +96,7 @@ fn main() {
     if let Some(_matches) = matches.subcommand_matches("new_claim") {
         let account = _matches.value_of("account").unwrap();
         let accountid = get_accountid_from_str(account);
-        let cid = get_cid(_matches.value_of("cid").unwrap());
+        let cid = get_cid(matches.value_of("cid").expect("please supply argument --cid"));
         // FIXME: supply arg
         //let cid = CurrencyIdentifier::default();
         let n_participants = _matches.value_of("n_participants").unwrap().parse::<u32>().unwrap();
@@ -112,11 +112,10 @@ fn main() {
             &hex::decode(_matches.value_of("claim").unwrap()).unwrap()[..]).unwrap();
         let attestation = sign_claim(
             claim,
-            AccountPublic::from(sr25519::Public::from(signer.public())).into_account()
+            signer_arg
         );
         println!("{}", hex::encode(attestation))
     }
-
 
     if let Some(_matches) = matches.subcommand_matches("fund_account") {
         let account = _matches.value_of("account").unwrap();
@@ -243,13 +242,43 @@ fn main() {
         println!("Transaction got finalized. Phase is now: {:?}. tx hash: {:?}", phase, tx_hash);       
     }
 
+    if let Some(_matches) = matches.subcommand_matches("grant_reputation") {
+        // root call, must be signed by master
+        let _api = api.clone().set_signer(AccountKeyring::Alice.pair());
+        let p_arg = _matches.value_of("account").unwrap();
+        let accountid = get_accountid_from_str(p_arg);
+        let cid = get_cid(matches.value_of("cid").expect("please supply argument --cid"));
+
+        let xt: UncheckedExtrinsicV4<_>  = compose_extrinsic!(
+            _api.clone(),
+            "EncointerCeremonies",
+            "grant_reputation",
+            cid,
+            accountid.clone()
+        );
+
+        // send and watch extrinsic until finalized
+        let tx_hash = _api.send_extrinsic(xt.hex_encode()).unwrap();
+        let phase = get_current_phase(&api);
+        println!("Transaction got finalized. Account: {} should now have reputation. txhash: {:?}", accountid.to_ss58check(), tx_hash);       
+    }
+
     if let Some(_matches) = matches.subcommand_matches("register_participant") {
         let p_arg = _matches.value_of("account").unwrap();
         let accountid = get_accountid_from_str(p_arg);
         let p = get_pair_from_str(p_arg);
-        let cid = get_cid(_matches.value_of("cid").unwrap());
+        let cindex = get_ceremony_index(&api);
+        let cid = get_cid(matches.value_of("cid").expect("please supply argument --cid"));
         // FIXME:
-        let proof = None;
+        let proof = if _matches.is_present("proof") {
+            Some(prove_attendance(accountid, cid, cindex-1, p_arg))
+        } else {
+            None
+        };
+        //let proof : Option<ProofOfAttendance<Signature, AccountId>> = None;
+        // assume users keep the same pair forever (so prover == attendee)
+        //let proof = prove_attendance(acountid, cid, cindex-1)
+
         info!("ss58 is {}", p.public().to_ss58check());
         if (get_current_phase(&api) != CeremonyPhaseType::REGISTERING) {
             println!("wrong ceremony phase for registering participant");
@@ -284,7 +313,7 @@ fn main() {
             let w = Attestation::decode(&mut &hex::decode(arg).unwrap()[..]).unwrap();
             attestations.push(w);
         }
-        let cid = get_cid(_matches.value_of("cid").unwrap());
+        let cid = get_cid(matches.value_of("cid").expect("please supply argument --cid"));
 
         let _api = api.clone().set_signer(sr25519_core::Pair::from(signer));
         let xt: UncheckedExtrinsicV4<_> = compose_extrinsic!(
@@ -299,48 +328,64 @@ fn main() {
 
     }
 
-
     if let Some(_matches) = matches.subcommand_matches("list_meetup_registry") {
         let cindex = get_ceremony_index(&api);
-        println!("listing meetups for ceremony nr {}", cindex);
-        let mcount = get_meetup_count(&api);
+        let cid = get_cid(matches.value_of("cid").expect("please supply argument --cid"));
+        println!("listing meetups for cid {} and ceremony nr {}", cid.encode().to_base58(), cindex);
+        let mcount = get_meetup_count(&api, (cid, cindex));
         println!("number of meetups assigned:  {}", mcount);
-        let participants = get_meetup_participants(&api, cindex, mcount).unwrap();
-        println!("MeetupRegistry[{}, {}]participants are:", cindex, mcount);
-        for p in participants.iter() {
-            println!("   {:?}", p);
+        for m in 1..=mcount {
+            match get_meetup_participants(&api, (cid, cindex), m) {
+                Some(participants) => {
+                    println!("MeetupRegistry[{}, {}]participants are:", cindex, m);
+                    for p in participants.iter() {
+                        println!("   {:?}", p);
+                    }
+                },
+                None => println!("MeetupRegistry[{}, {}] EMPTY", cindex, m)
+            }
         }
     }
 
     if let Some(_matches) = matches.subcommand_matches("list_participant_registry") {
         let cindex = get_ceremony_index(&api);
-        println!("listing participants for ceremony nr {}", cindex);
-        let pcount = get_participant_count(&api);
+        let cid = get_cid(matches.value_of("cid").expect("please supply argument --cid"));
+        println!("listing participants for cid {} and ceremony nr {}", cid.encode().to_base58(), cindex);
+        let pcount = get_participant_count(&api, (cid, cindex));
         println!("number of participants assigned:  {}", pcount);
         for p in 1..pcount+1 {
-            let accountid = get_participant(&api, cindex, p).unwrap();
+            let accountid = get_participant(&api, (cid, cindex), p).unwrap();
             println!("ParticipantRegistry[{}, {}] = {:?}", cindex, p, accountid);
+        }
+    }
+
+    if let Some(_matches) = matches.subcommand_matches("list_currencies") {
+        let cids = get_currency_identifiers(&api).expect("no currency registered");
+        println!("number of currencies:  {}", cids.len());
+        for cid in cids.iter() {
+            println!("currency with cid {}", cid.encode().to_base58());
         }
     }
 
     if let Some(_matches) = matches.subcommand_matches("list_attestations_registry") {
         let cindex = get_ceremony_index(&api);
-        println!("listing attestations for ceremony nr {}", cindex);
-        let wcount = get_attestation_count(&api);
+        let cid = get_cid(matches.value_of("cid").expect("please supply argument --cid"));
+        println!("listing attestations for cid {} and ceremony nr {}", cid.encode().to_base58(), cindex);
+        let wcount = get_attestation_count(&api, (cid, cindex));
         println!("number of attestations:  {}", wcount);
-        let pcount = get_participant_count(&api);
+        let pcount = get_participant_count(&api, (cid, cindex));
 
         let mut participants_windex = HashMap::new();
         for p in 1..pcount+1 {
-            let accountid = get_participant(&api, cindex, p)
+            let accountid = get_participant(&api, (cid, cindex), p)
                 .expect("error getting participant");
-            match get_participant_attestation_index(&api, cindex, &accountid) {
+            match get_participant_attestation_index(&api, (cid, cindex), &accountid) {
                 Some(windex) => participants_windex.insert(windex as AttestationIndexType, accountid),
                 _ => continue,
             };
         }
         for w in 1..wcount+1 {
-            let attestations = get_attestations(&api, cindex, w);
+            let attestations = get_attestations(&api, (cid, cindex), w);
             println!("AttestationRegistry[{}, {} ({})] = {:?}", cindex, w, participants_windex[&w], attestations);
         }
     }
@@ -436,22 +481,23 @@ fn get_ceremony_index(api: &Api<sr25519::Pair>) -> CeremonyIndexType {
             ).unwrap() as CeremonyIndexType
 }
 
-fn get_meetup_count(api: &Api<sr25519::Pair>) -> MeetupIndexType {
+fn get_meetup_count(api: &Api<sr25519::Pair>, key: CurrencyCeremony) -> MeetupIndexType {
     hexstr_to_u64(api
-            .get_storage("EncointerCeremonies", "MeetupCount", None)
+            .get_storage("EncointerCeremonies", "MeetupCount", Some(key.encode()))
             .unwrap()
             ).unwrap() as MeetupIndexType
 }
 
-fn get_participant_count(api: &Api<sr25519::Pair>) -> ParticipantIndexType {
+fn get_participant_count(api: &Api<sr25519::Pair>, key: CurrencyCeremony) -> ParticipantIndexType {
     hexstr_to_u64(api
-            .get_storage("EncointerCeremonies", "ParticipantCount", None)
+            .get_storage("EncointerCeremonies", "ParticipantCount", Some(key.encode()))
             .unwrap()
             ).unwrap() as ParticipantIndexType
 }
-fn get_attestation_count(api: &Api<sr25519::Pair>) -> ParticipantIndexType {
+
+fn get_attestation_count(api: &Api<sr25519::Pair>, key: CurrencyCeremony) -> ParticipantIndexType {
     hexstr_to_u64(api
-            .get_storage("EncointerCeremonies", "AttestationCount", None)
+            .get_storage("EncointerCeremonies", "AttestationCount", Some(key.encode()))
             .unwrap()
             ).unwrap() as ParticipantIndexType
 }
@@ -465,13 +511,13 @@ fn get_current_phase(api: &Api<sr25519::Pair>) -> CeremonyPhaseType {
 
 fn get_participant(
     api: &Api<sr25519::Pair>, 
-    cindex: CeremonyIndexType, 
+    key: CurrencyCeremony,
     pindex: ParticipantIndexType
     ) -> Option<AccountId> 
 {
     let res = api
         .get_storage_double_map("EncointerCeremonies", "ParticipantRegistry", 
-            cindex.encode(), pindex.encode()).unwrap();
+            key.encode(), pindex.encode()).unwrap();
     match res.as_str() {
         "null" => None,
         _ => {
@@ -483,39 +529,39 @@ fn get_participant(
 
 fn get_participant_index(
     api: &Api<sr25519::Pair>, 
-    cindex: CeremonyIndexType, 
+    key: CurrencyCeremony,
     account: &AccountId
     ) -> Option<ParticipantIndexType> 
 {
     let res = hexstr_to_u64(api
         .get_storage_double_map("EncointerCeremonies", "ParticipantIndex", 
-            cindex.encode(), (*account).encode()).unwrap()).unwrap();
+            key.encode(), (*account).encode()).unwrap()).unwrap();
     info!("got participant index for {}: {}", account.to_ss58check(), res);
     Some(res)
 }
 
 fn get_meetup_index_for(
     api: &Api<sr25519::Pair>, 
-    cindex: CeremonyIndexType, 
+    key: CurrencyCeremony,
     account: &AccountId
     ) -> Option<MeetupIndexType> 
 {
     let res = hexstr_to_u64(api
         .get_storage_double_map("EncointerCeremonies", "MeetupIndex", 
-            cindex.encode(), (*account).encode()).unwrap()).unwrap();
+            key.encode(), (*account).encode()).unwrap()).unwrap();
     info!("got meetup index for {}: {}", (*account).to_ss58check(), res);
     Some(res)
 }
 
 fn get_meetup_participants(
     api: &Api<sr25519::Pair>, 
-    cindex: CeremonyIndexType, 
+    key: CurrencyCeremony,
     mindex: MeetupIndexType
     ) -> Option<Vec<AccountId>> 
 {
     let res = api
         .get_storage_double_map("EncointerCeremonies", "MeetupRegistry", 
-            cindex.encode(), mindex.encode()).unwrap();
+            key.encode(), mindex.encode()).unwrap();
     match res.as_str() {
         "null" => None,
         _ => {
@@ -527,13 +573,13 @@ fn get_meetup_participants(
 
 fn get_attestations(
     api: &Api<sr25519::Pair>, 
-    cindex: CeremonyIndexType, 
+    key: CurrencyCeremony,
     windex: ParticipantIndexType, 
     ) -> Option<Vec<AccountId>> 
 {
     let res = api
         .get_storage_double_map("EncointerCeremonies", "AttestationRegistry", 
-            cindex.encode(), windex.encode()).unwrap();
+            key.encode(), windex.encode()).unwrap();
     match res.as_str() {
         "null" => None,
         _ => {
@@ -545,13 +591,13 @@ fn get_attestations(
 
 fn get_participant_attestation_index(
     api: &Api<sr25519::Pair>, 
-    cindex: CeremonyIndexType,
+    key: CurrencyCeremony,
     accountid: &AccountId
     ) -> Option<ParticipantIndexType> 
 {
 
     let res = api.get_storage_double_map("EncointerCeremonies", "AttestationIndex", 
-            cindex.encode(), accountid.encode()).unwrap();
+            key.encode(), accountid.encode()).unwrap();
     match res.as_str() {
         "null" => None,
         _ => {
@@ -570,7 +616,7 @@ fn new_claim_for(
     n_participants: u32,
 ) -> Vec<u8> {
     let cindex = get_ceremony_index(api);
-    let mindex = get_meetup_index_for(api,cindex,&accountid).unwrap();
+    let mindex = get_meetup_index_for(api, (cid, cindex),&accountid).unwrap();
     let claim = ClaimOfAttendance::<AccountId> {
         claimant_public: accountid,
         currency_identifier: cid,
@@ -583,10 +629,11 @@ fn new_claim_for(
 
 fn sign_claim(
     claim: ClaimOfAttendance<AccountId>,
-    accountid: AccountId,
+    account_str: &str,
 ) -> Vec<u8> {
     info!("second call to get_pair_from_str");
-    let pair = get_pair_from_str(&accountid.to_ss58check());
+    let pair = get_pair_from_str(account_str);
+    let accountid = get_accountid_from_str(account_str);
     let attestation = Attestation { 
         claim: claim.clone(),
         signature: Signature::from(sr25519_core::Signature::from(pair.sign(&claim.encode()))),
@@ -595,5 +642,30 @@ fn sign_claim(
     attestation.encode()
 }
 
+fn get_currency_identifiers(api: &Api<sr25519::Pair>) -> Option<Vec<CurrencyIdentifier>> {
+    let res = api
+            .get_storage("EncointerCurrencies", "CurrencyIdentifiers", None)
+            .unwrap();
+    match res.as_str() {
+        "null" => None,
+        _ => {
+            let cids: Vec<CurrencyIdentifier> = Decode::decode(&mut &hexstr_to_vec(res).unwrap()[..]).unwrap();
+            Some(cids)
+        }
+    }
+}
+
+fn prove_attendance(prover: AccountId, cid: CurrencyIdentifier, cindex: CeremonyIndexType, attendee_str: &str) -> ProofOfAttendance<Signature, AccountId> {
+    let msg = (prover.clone(), cindex);
+    let attendee = get_pair_from_str(attendee_str);
+    let attendeeid = get_accountid_from_str(attendee_str); 
+    ProofOfAttendance{
+        prover_public: prover,
+        currency_identifier: cid,
+        ceremony_index: cindex,
+        attendee_public: attendeeid,
+        attendee_signature: Signature::from(sr25519_core::Signature::from(attendee.sign(&msg.encode()))),
+    }
+}
 
 

@@ -114,9 +114,9 @@ package="encointer-currencies-host-calls"
 git = "https://github.com/encointer/pallet-encointer-currencies"
 
 #only while debugging
-#[patch."https://github.com/encointer/pallet-encointer-ceremonies"]
-#pallet-encointer-ceremonies = { path = "../pallet-encointer-ceremonies" }
+[patch."https://github.com/encointer/pallet-encointer-ceremonies"]
+pallet-encointer-ceremonies = { path = "../pallet-encointer-ceremonies" }
 
-#[patch."https://github.com/encointer/pallet-encointer-currencies"]
-#pallet-encointer-currencies = { path = "../pallet-encointer-currencies" }
-#encointer-currencies-host-calls = { path = "../pallet-encointer-currencies/host-calls" }
+[patch."https://github.com/encointer/pallet-encointer-currencies"]
+pallet-encointer-currencies = { path = "../pallet-encointer-currencies" }
+encointer-currencies-host-calls = { path = "../pallet-encointer-currencies/host-calls" }

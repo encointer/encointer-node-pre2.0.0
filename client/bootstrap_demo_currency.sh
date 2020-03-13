@@ -1,22 +1,14 @@
 #!/bin/bash
 CLIENT="../target/release/encointer-client 127.0.0.1:9979 "
 
-#./bootstrap_demo_currency.sh
-cid=AhfyPnDshTNJSxvLXtRkvRPEDFKcxSERonLK78KdtF5s
+# register new currency
+cid=$($CLIENT new_currency test-locations-mediterranean.json //Alice)
+echo $cid
 
-# generate and pre-fund accounts
-account1=$($CLIENT new_account)
-echo $account1
-$CLIENT fund_account $account1
+# list currenies
+$CLIENT list_currencies
 
-account2=$($CLIENT new_account)
-echo $account2
-$CLIENT fund_account $account2
-
-account3=$($CLIENT new_account)
-echo $account3
-$CLIENT fund_account $account3
-
+# bootstrap currency with well-known keys
 phase=$($CLIENT get_phase)
 echo "phase is $phase"
 if [ "$phase" == "REGISTERING" ]; then
@@ -32,16 +24,16 @@ fi
 phase=$($CLIENT get_phase)
 echo "phase is now: $phase"
 
-# master of ceremony fakes reputation
-$CLIENT --cid $cid grant_reputation $account1
-$CLIENT --cid $cid grant_reputation $account2
-$CLIENT --cid $cid grant_reputation $account3
+account1=//Alice
+account2=//Bob
+account3=//Charlie
 
-echo "*** registering new accounts for meetup"
-# assuming we are in "REGISTERING" phase
-$CLIENT --cid $cid register_participant $account1 --proof
-$CLIENT --cid $cid register_participant $account2 --proof
-$CLIENT --cid $cid register_participant $account3 --proof
+# charlie has no genesis funds
+$CLIENT fund_account $account3
+
+$CLIENT --cid $cid register_participant $account1
+$CLIENT --cid $cid register_participant $account2
+$CLIENT --cid $cid register_participant $account3
 
 # list registry
 $CLIENT --cid $cid list_participant_registry
@@ -52,7 +44,7 @@ $CLIENT next_phase
 $CLIENT --cid $cid list_meetup_registry
 
 $CLIENT next_phase
-# should now be WITNESSING
+# should now be ATTESTING
 
 echo "*** start meetup"
 claim1=$($CLIENT --cid $cid new_claim $account1 3)
@@ -76,14 +68,5 @@ $CLIENT --cid $cid register_attestations $account3 $witness1_3 $witness2_3
 
 $CLIENT --cid $cid list_attestations_registry
 
-echo "*** balances before reward round"
-$CLIENT --cid $cid get_balance $account1
-$CLIENT --cid $cid get_balance $account2
-$CLIENT --cid $cid get_balance $account3
-echo "*** move phase to issue rewards"
 $CLIENT next_phase
 # should now be REGISTERING
-echo "*** balances after reward round"
-$CLIENT --cid $cid get_balance $account1
-$CLIENT --cid $cid get_balance $account2
-$CLIENT --cid $cid get_balance $account3

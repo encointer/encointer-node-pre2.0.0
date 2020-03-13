@@ -18,9 +18,19 @@ args:
 #        help: Sets the keystore directory path
 #        value_name: PATH
 #        takes_value: true
+    - cid:
+        long: cid
+        takes_value: true
+        help: Currency identifier (base58 encoded hash)
 subcommands:
     - next_phase:
         about: Advance ceremony state machine to next phase by ROOT call
+    - grant_reputation:
+        about: pretend that an account has previous reputation
+        args:
+            - account:
+                required: true
+                index: 1
     - get_phase:
         about: read current ceremony phase from chain
     - get_balance:
@@ -39,6 +49,8 @@ subcommands:
             - account:
                 required: true
                 index: 1
+            - proof:
+                long: proof
     - new_currency:
         about: register a new currency
         settings:
@@ -62,12 +74,9 @@ subcommands:
             - account:
                 required: true
                 index: 1
-            - cid:
-                required: true
-                index: 2     
             - n_participants:
                 required: true
-                index: 3     
+                index: 2
     - sign_claim:
         about: attest another participants attendance by signing her claim
         args:
@@ -111,15 +120,17 @@ subcommands:
         about: query entire meetup registry and list all meetups and participants
     - list_participant_registry:
         about: query entire participant registry 
-    - list_witnesses_registry:
+    - list_attestations_registry:
         about: query entire witnesses registry 
-    - register_witnesses:
+    - list_currencies:
+        about: list all currencies and their properties
+    - register_attestations:
         about: send attestations for other participants to the chain
         args:
             - account:
                 required: true
                 index: 1
-            - witness:
+            - attestation:
                 required: true
                 multiple: true
                 min_values: 1
