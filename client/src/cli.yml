@@ -34,7 +34,7 @@ subcommands:
     - get_phase:
         about: read current ceremony phase from chain
     - get_balance:
-        about: get balance for account
+        about: get balance for account. If no --cid is specified, get NCTR balance
         settings:
             - ColoredHelp
         args:

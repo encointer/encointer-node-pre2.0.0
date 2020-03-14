@@ -62,11 +62,16 @@ witness3_1=$($CLIENT sign_claim $account3 $claim1)
 witness3_2=$($CLIENT sign_claim $account3 $claim2)
 
 echo "*** send witnesses to chain"
-$CLIENT --cid $cid register_attestations $account1 $witness2_1 $witness3_1
-$CLIENT --cid $cid register_attestations $account2 $witness1_2 $witness3_2
-$CLIENT --cid $cid register_attestations $account3 $witness1_3 $witness2_3
+$CLIENT register_attestations $account1 $witness2_1 $witness3_1
+$CLIENT register_attestations $account2 $witness1_2 $witness3_2
+$CLIENT register_attestations $account3 $witness1_3 $witness2_3
 
 $CLIENT --cid $cid list_attestations_registry
 
 $CLIENT next_phase
 # should now be REGISTERING
+
+echo "account balances for new currency with cid $cid"
+$CLIENT --cid $cid get_balance //Alice
+$CLIENT --cid $cid get_balance //Bob
+$CLIENT --cid $cid get_balance //Charlie

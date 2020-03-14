@@ -21,29 +21,25 @@
 
 #[macro_use]
 extern crate clap;
-#[macro_use]
 extern crate log;
 extern crate env_logger;
 
-use app_crypto::{ed25519, sr25519, AppKey, AppPair, AppPublic};
+use app_crypto::{ed25519, sr25519};
 use keyring::AccountKeyring;
 use keystore::Store;
 use std::path::PathBuf;
 
-use bip39::{Language, Mnemonic, MnemonicType};
 use codec::{Decode, Encode};
 use primitives::{
-    crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
+    crypto::Ss58Codec,
     hashing::blake2_256,
-    hexdisplay::HexDisplay,
-    sr25519 as sr25519_core, Pair, Public, H256,
+    sr25519 as sr25519_core, Pair
 };
 use substrate_api_client::{
-    compose_extrinsic, extrinsic,
+    compose_extrinsic, 
     extrinsic::xt_primitives::{GenericAddress, UncheckedExtrinsicV4},
     node_metadata,
-    rpc::json_req,
-    utils::{hexstr_to_hash, hexstr_to_u256, hexstr_to_u64, hexstr_to_vec, storage_key_hash},
+    utils::{hexstr_to_u256, hexstr_to_u64, hexstr_to_vec},
     Api,
 };
 
@@ -54,15 +50,14 @@ use encointer_ceremonies::{
 };
 use encointer_currencies::{CurrencyIdentifier, Location};
 use encointer_node_runtime::{
-    AccountId, BalancesCall, Call, EncointerCeremoniesCall, Event, Hash, Signature,
+    AccountId, Event, Hash, Signature,
 };
 
 use sr_primitives::traits::{IdentifyAccount, Verify};
 //use primitive_types::U256;
 use clap::App;
 use geojson::GeoJson;
-use log::Level;
-use log::{debug, info, trace, warn};
+use log::*;
 use serde_json;
 use std::collections::HashMap;
 use std::fs;
@@ -119,7 +114,6 @@ fn main() {
     if let Some(_matches) = matches.subcommand_matches("sign_claim") {
         let signer_arg = _matches.value_of("signer").unwrap();
         info!("first call to get_pair_from_str");
-        let signer = get_pair_from_str(signer_arg);
         let claim = ClaimOfAttendance::decode(
             &mut &hex::decode(_matches.value_of("claim").unwrap()).unwrap()[..],
         )
@@ -212,9 +206,6 @@ fn main() {
                                             accountid
                                         );
                                     }
-                                    _ => {
-                                        debug!("ignoring unsupported ceremony event");
-                                    }
                                 }
                             }
                             _ => debug!("ignoring unsupported module event: {:?}", evr.event),
@@ -229,12 +220,23 @@ fn main() {
     if let Some(_matches) = matches.subcommand_matches("get_balance") {
         let account = _matches.value_of("account").unwrap();
         let accountid = get_accountid_from_str(account);
-        let result_str = api
-            .get_storage("Balances", "FreeBalance", Some(accountid.encode()))
-            .unwrap();
-        let result = hexstr_to_u256(result_str).unwrap();
+        let balance = match matches.value_of("cid") {
+            Some(cid_str) => {
+                let cid = get_cid(cid_str);
+                let result_str = api
+                    .get_storage_double_map("EncointerBalances", "Balance", cid.encode(), accountid.encode())
+                    .unwrap();
+                hexstr_to_u256(result_str).unwrap()
+            }
+            None => {
+                let result_str = api
+                    .get_storage("Balances", "FreeBalance", Some(accountid.encode()))
+                    .unwrap();
+                hexstr_to_u256(result_str).unwrap()
+            }
+        };
         info!("ss58 is {}", accountid.to_ss58check());
-        println!("balance for {} is {}", account, result);
+        println!("balance for {} is {}", account, balance);
     }
 
     if let Some(_matches) = matches.subcommand_matches("get_phase") {
@@ -295,7 +297,6 @@ fn main() {
 
         // send and watch extrinsic until finalized
         let tx_hash = _api.send_extrinsic(xt.hex_encode()).unwrap();
-        let phase = get_current_phase(&api);
         println!(
             "Transaction got finalized. Account: {} should now have reputation. txhash: {:?}",
             accountid.to_ss58check(),
@@ -324,7 +325,7 @@ fn main() {
         //let proof = prove_attendance(acountid, cid, cindex-1)
 
         info!("ss58 is {}", p.public().to_ss58check());
-        if (get_current_phase(&api) != CeremonyPhaseType::REGISTERING) {
+        if get_current_phase(&api) != CeremonyPhaseType::REGISTERING {
             println!("wrong ceremony phase for registering participant");
             return;
         }
@@ -347,7 +348,7 @@ fn main() {
         let p_arg = _matches.value_of("account").unwrap();
         let signer = get_pair_from_str(p_arg);
 
-        if (get_current_phase(&api) != CeremonyPhaseType::ATTESTING) {
+        if get_current_phase(&api) != CeremonyPhaseType::ATTESTING {
             println!("wrong ceremony phase for registering participant");
             return;
         }
@@ -357,11 +358,6 @@ fn main() {
             let w = Attestation::decode(&mut &hex::decode(arg).unwrap()[..]).unwrap();
             attestations.push(w);
         }
-        let cid = get_cid(
-            matches
-                .value_of("cid")
-                .expect("please supply argument --cid"),
-        );
 
         let _api = api.clone().set_signer(sr25519_core::Pair::from(signer));
         let xt: UncheckedExtrinsicV4<_> = compose_extrinsic!(
@@ -625,29 +621,6 @@ fn get_participant(
             Some(accountid)
         }
     }
-}
-
-fn get_participant_index(
-    api: &Api<sr25519::Pair>,
-    key: CurrencyCeremony,
-    account: &AccountId,
-) -> Option<ParticipantIndexType> {
-    let res = hexstr_to_u64(
-        api.get_storage_double_map(
-            "EncointerCeremonies",
-            "ParticipantIndex",
-            key.encode(),
-            (*account).encode(),
-        )
-        .unwrap(),
-    )
-    .unwrap();
-    info!(
-        "got participant index for {}: {}",
-        account.to_ss58check(),
-        res
-    );
-    Some(res)
 }
 
 fn get_meetup_index_for(

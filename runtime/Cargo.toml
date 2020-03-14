@@ -14,6 +14,11 @@ default-features = false
 git = "https://github.com/encointer/pallet-encointer-currencies"
 package = "pallet-encointer-currencies"
 
+[dependencies.encointer-balances]
+default-features = false
+git = "https://github.com/encointer/pallet-encointer-balances"
+package = "pallet-encointer-balances"
+
 [dependencies.encointer-currencies-host-calls]
 default-features = false
 package="encointer-currencies-host-calls"
