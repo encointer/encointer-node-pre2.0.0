@@ -108,12 +108,6 @@ git = "https://github.com/paritytech/substrate"
 package = "substrate-build-script-utils"
 rev = "3bf9540e72df5ecb3955845764dfee7dcdbb26b5"
 
-[dependencies.encointer-currencies-host-calls]
-default-features = false
-package="encointer-currencies-host-calls"
-git = "https://github.com/encointer/pallet-encointer-currencies"
-
-
 
 #only while debugging
 [patch."https://github.com/encointer/pallet-encointer-ceremonies"]
@@ -121,7 +115,12 @@ pallet-encointer-ceremonies = { path = "../pallet-encointer-ceremonies" }
 
 [patch."https://github.com/encointer/pallet-encointer-currencies"]
 pallet-encointer-currencies = { path = "../pallet-encointer-currencies" }
-encointer-currencies-host-calls = { path = "../pallet-encointer-currencies/host-calls" }
 
 [patch."https://github.com/encointer/pallet-encointer-balances"]
 pallet-encointer-balances = { path = "../pallet-encointer-balances" }
+
+[patch."https://github.com/encointer/pallet-encointer-scheduler"]
+pallet-encointer-scheduler = { path = "../pallet-encointer-scheduler" }
+
+[patch."https://github.com/encointer/substrate-fixed"]
+substrate-fixed = { path = "../substrate-fixed" }

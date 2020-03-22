@@ -35,11 +35,12 @@ pub use sr_primitives::{Permill, Perbill};
 pub use support::{StorageValue, construct_runtime, parameter_types, traits::Randomness};
 
 //pub use substratee_registry::Call as SubstraTEERegistryCall;
+pub use encointer_scheduler::Call as EncointerSchedulerCall;
 pub use encointer_ceremonies::Call as EncointerCeremoniesCall;
 pub use encointer_currencies::Call as EncointerCurrenciesCall;
 pub use encointer_balances::Call as EncointerBalancesCall;
 
-pub use encointer_ceremonies::CeremonyPhaseType;
+pub use encointer_scheduler::CeremonyPhaseType;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -241,6 +242,11 @@ impl sudo::Trait for Runtime {
 //	type Event = Event;
 //}
 
+impl encointer_scheduler::Trait for Runtime {
+	type Event = Event;
+	type OnCeremonyPhaseChange = encointer_ceremonies::Module<Runtime>;
+}
+
 impl encointer_ceremonies::Trait for Runtime {
 	type Event = Event;
 	type Public = <MultiSignature as Verify>::Signer;
@@ -272,6 +278,7 @@ construct_runtime!(
 		TransactionPayment: transaction_payment::{Module, Storage},
 		Sudo: sudo,
 //        SubstraTEERegistry: substratee_registry::{Module, Call, Storage, Event<T>},
+		EncointerScheduler: encointer_scheduler::{Module, Call, Storage, Config<T>, Event},
 		EncointerCeremonies: encointer_ceremonies::{Module, Call, Storage, Config<T>, Event<T>},
 		EncointerCurrencies: encointer_currencies::{Module, Call, Storage, Config<T>, Event<T>},
 		EncointerBalances: encointer_balances::{Module, Call, Storage, Event<T>},

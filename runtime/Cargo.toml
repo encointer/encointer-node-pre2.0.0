@@ -4,6 +4,11 @@ version = "4.0.1"
 authors = ["encointer.org <alain@encointer.org>"]
 edition = "2018"
 
+[dependencies.encointer-scheduler]
+default-features = false
+git = "https://github.com/encointer/pallet-encointer-scheduler"
+package = "pallet-encointer-scheduler"
+
 [dependencies.encointer-ceremonies]
 default-features = false
 git = "https://github.com/encointer/pallet-encointer-ceremonies"
@@ -18,11 +23,6 @@ package = "pallet-encointer-currencies"
 default-features = false
 git = "https://github.com/encointer/pallet-encointer-balances"
 package = "pallet-encointer-balances"
-
-[dependencies.encointer-currencies-host-calls]
-default-features = false
-package="encointer-currencies-host-calls"
-git = "https://github.com/encointer/pallet-encointer-currencies"
 
 [dependencies.aura]
 default-features = false
@@ -225,7 +225,8 @@ std = [
 	"transaction-payment/std",
 	"tx-pool-api/std",
 	"version/std",
+	"encointer-scheduler/std",
 	"encointer-ceremonies/std",
+	"encointer-balances/std",
 	"encointer-currencies/std",
-	"encointer-currencies-host-calls/std",
 ]
