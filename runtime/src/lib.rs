@@ -192,7 +192,7 @@ parameter_types! {
 impl timestamp::Trait for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
-	type OnTimestampSet = Aura;
+	type OnTimestampSet = (Aura, EncointerScheduler);
 	type MinimumPeriod = MinimumPeriod;
 }
 
@@ -242,9 +242,13 @@ impl sudo::Trait for Runtime {
 //	type Event = Event;
 //}
 
+parameter_types! {
+	pub const MomentsPerDay: u64 = 86_400_000; // [ms/d]
+}
 impl encointer_scheduler::Trait for Runtime {
 	type Event = Event;
 	type OnCeremonyPhaseChange = encointer_ceremonies::Module<Runtime>;
+	type MomentsPerDay = MomentsPerDay;
 }
 
 impl encointer_ceremonies::Trait for Runtime {

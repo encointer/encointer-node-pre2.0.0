@@ -4,14 +4,13 @@
 use primitives::{Pair, Public, sr25519};
 use encointer_node_runtime::{
     AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, IndicesConfig, SudoConfig,
-	SystemConfig, WASM_BINARY, Signature,
+	SystemConfig, WASM_BINARY, Signature, CeremonyPhaseType,
 	EncointerCeremoniesConfig, EncointerCurrenciesConfig, EncointerSchedulerConfig, 
 };
 use aura_primitives::sr25519::{AuthorityId as AuraId};
 use grandpa_primitives::{AuthorityId as GrandpaId};
 use substrate_service;
 use sr_primitives::traits::{Verify, IdentifyAccount};
-
 
 // Note this is the URL for the telemetry server
 //const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -147,10 +146,14 @@ fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>,
 	    encointer_scheduler: Some(EncointerSchedulerConfig {
             //current_phase: CeremonyPhaseType::REGISTERING,
             current_ceremony_index: 1,
-            ceremony_master: get_account_id_from_seed::<sr25519::Public>("Alice"),
+			ceremony_master: get_account_id_from_seed::<sr25519::Public>("Alice"),
+			phase_durations: vec![
+                (CeremonyPhaseType::REGISTERING, 86_400_000),
+                (CeremonyPhaseType::ASSIGNING, 86_400_000),
+                (CeremonyPhaseType::ATTESTING, 86_400_000),
+            ],
 		}),
 		encointer_ceremonies: Some(EncointerCeremoniesConfig {
-            //current_phase: CeremonyPhaseType::REGISTERING,
             ceremony_reward: 1_000_000,
 		}),
 		encointer_currencies: Some(EncointerCurrenciesConfig {
