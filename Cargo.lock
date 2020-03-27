@@ -2538,6 +2538,7 @@ dependencies = [
  "pallet-encointer-balances 0.1.0",
  "pallet-encointer-currencies 0.1.0",
  "pallet-encointer-scheduler 0.1.0",
+ "pallet-timestamp 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",

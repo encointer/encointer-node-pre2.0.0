@@ -154,7 +154,9 @@ fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>,
             ],
 		}),
 		encointer_ceremonies: Some(EncointerCeremoniesConfig {
-            ceremony_reward: 1_000_000,
+			ceremony_reward: 1_000_000,
+			time_tolerance: 600_000, // +-10min
+			location_tolerance: 1_000, // [m] 
 		}),
 		encointer_currencies: Some(EncointerCurrenciesConfig {
             currency_master: get_account_id_from_seed::<sr25519::Public>("Alice"),
