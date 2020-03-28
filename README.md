@@ -44,10 +44,10 @@ cargo build --release
 You can start a development chain with:
 
 ```bash
-cargo run -- --dev --execution native -lruntime=debug
+./target/release/encointer-node --dev --ws-port 9979 --execution native -lruntime=debug 2>&1 | grep --color=always -e "^" -e 'DEBUG runtime'
 ```
 
-Additional CLI usage options are available and may be shown by running `cargo run -- --help`.
+Additional CLI usage options are available and may be shown by running `./target/release/encointer-node --help`.
 
 ## Run Client
 encointer comes with a cli application that allows interaction with the chain
@@ -65,7 +65,7 @@ The master of ceremony can play fast-forward for demo purposes (ceremonies only 
 encointer-node/client> ./encointer-client 127.0.0.1:9944 next_phase
 ```
 
-To run a full demo (you may need to fix ports in the scripts):
+To run a full demo (you may need to fix ports in the scripts if you change them):
 ```
 encointer-node/client> ./bootstrap_demo_currency.sh
 encointer-node/client> ./demo_poc1.sh

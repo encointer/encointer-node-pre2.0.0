@@ -68,6 +68,9 @@ pub type Hash = primitives::H256;
 /// Digest item type.
 pub type DigestItem = generic::DigestItem<Hash>;
 
+/// A type to hold UTC unix epoch [ms]
+pub type Moment = u64;
+pub const ONE_DAY: Moment = 86_400_000;
 
 
 //pub mod substratee_registry;
@@ -191,7 +194,7 @@ parameter_types! {
 
 impl timestamp::Trait for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
-	type Moment = u64;
+	type Moment = Moment;
 	type OnTimestampSet = (Aura, EncointerScheduler);
 	type MinimumPeriod = MinimumPeriod;
 }
@@ -243,7 +246,7 @@ impl sudo::Trait for Runtime {
 //}
 
 parameter_types! {
-	pub const MomentsPerDay: u64 = 86_400_000; // [ms/d]
+	pub const MomentsPerDay: Moment = 86_400_000; // [ms/d]
 }
 impl encointer_scheduler::Trait for Runtime {
 	type Event = Event;

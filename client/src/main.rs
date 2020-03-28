@@ -28,6 +28,7 @@ use app_crypto::{ed25519, sr25519};
 use keyring::AccountKeyring;
 use keystore::Store;
 use std::path::PathBuf;
+use std::ops::Rem;
 
 use codec::{Decode, Encode};
 use primitives::{
@@ -35,6 +36,7 @@ use primitives::{
     hashing::blake2_256,
     sr25519 as sr25519_core, Pair
 };
+use fixed::traits::LossyInto;
 use substrate_api_client::{
     compose_extrinsic, 
     extrinsic::xt_primitives::{GenericAddress, UncheckedExtrinsicV4},
@@ -45,12 +47,13 @@ use substrate_api_client::{
 
 use base58::{FromBase58, ToBase58};
 use encointer_ceremonies::{
-    Attestation, AttestationIndexType, CeremonyIndexType, CeremonyPhaseType, ClaimOfAttendance,
+    Attestation, AttestationIndexType, ClaimOfAttendance,
     CurrencyCeremony, MeetupIndexType, ParticipantIndexType, ProofOfAttendance,
 };
-use encointer_currencies::{CurrencyIdentifier, Location};
+use encointer_scheduler::{CeremonyIndexType, CeremonyPhaseType};
+use encointer_currencies::{CurrencyIdentifier, Location, Degree};
 use encointer_node_runtime::{
-    AccountId, Event, Hash, Signature,
+    AccountId, Event, Hash, Signature, Moment, ONE_DAY
 };
 
 use sr_primitives::traits::{IdentifyAccount, Verify};
@@ -100,8 +103,6 @@ fn main() {
                 .value_of("cid")
                 .expect("please supply argument --cid"),
         );
-        // FIXME: supply arg
-        //let cid = CurrencyIdentifier::default();
         let n_participants = _matches
             .value_of("n_participants")
             .unwrap()
@@ -195,9 +196,6 @@ fn main() {
                             Event::encointer_ceremonies(ee) => {
                                 println!(">>>>>>>>>> ceremony event: {:?}", ee);
                                 match &ee {
-                                    encointer_ceremonies::RawEvent::PhaseChangedTo(phase) => {
-                                        println!("Phase changed to: {:?}", phase);
-                                    }
                                     encointer_ceremonies::RawEvent::ParticipantRegistered(
                                         accountid,
                                     ) => {
@@ -207,7 +205,23 @@ fn main() {
                                         );
                                     }
                                 }
+                            }, 
+                            Event::encointer_scheduler(ee) => {
+                                println!(">>>>>>>>>> scheduler event: {:?}", ee);
+                                match &ee {
+                                    encointer_scheduler::Event::PhaseChangedTo(phase) => {
+                                        println!("Phase changed to: {:?}", phase);
+                                    }
+                                }
                             }
+                            Event::encointer_currencies(ee) => {
+                                println!(">>>>>>>>>> currency event: {:?}", ee);
+                                match &ee {
+                                    encointer_currencies::RawEvent::CurrencyRegistered(account, cid) => {
+                                        println!("Currency registered: by {}, cid: {:?}", account, cid);
+                                    }
+                                }
+                            },
                             _ => debug!("ignoring unsupported module event: {:?}", evr.event),
                         }
                     }
@@ -265,7 +279,7 @@ fn main() {
         let _api = api.clone().set_signer(AccountKeyring::Alice.pair());
 
         let xt: UncheckedExtrinsicV4<_> =
-            compose_extrinsic!(_api.clone(), "EncointerCeremonies", "next_phase");
+            compose_extrinsic!(_api.clone(), "EncointerScheduler", "next_phase");
 
         // send and watch extrinsic until finalized
         let tx_hash = _api.send_extrinsic(xt.hex_encode()).unwrap();
@@ -353,7 +367,7 @@ fn main() {
             return;
         }
         let attestation_args: Vec<_> = _matches.values_of("attestation").unwrap().collect();
-        let mut attestations: Vec<Attestation<Signature, AccountId>> = vec![];
+        let mut attestations: Vec<Attestation<Signature, AccountId, Moment>> = vec![];
         for arg in attestation_args.iter() {
             let w = Attestation::decode(&mut &hex::decode(arg).unwrap()[..]).unwrap();
             attestations.push(w);
@@ -386,6 +400,10 @@ fn main() {
         let mcount = get_meetup_count(&api, (cid, cindex));
         println!("number of meetups assigned:  {}", mcount);
         for m in 1..=mcount {
+            println!("MeetupRegistry[{}, {}] location is {:?}", 
+                cindex, m, get_meetup_location(&api, cid, m));
+            println!("MeetupRegistry[{}, {}] meeting time is {:?}", 
+                cindex, m, get_meetup_time(&api, cid, m));
             match get_meetup_participants(&api, (cid, cindex), m) {
                 Some(participants) => {
                     println!("MeetupRegistry[{}, {}]participants are:", cindex, m);
@@ -478,8 +496,8 @@ fn main() {
                     let val = &feature.geometry.as_ref().unwrap().value;
                     if let geojson::Value::Point(pt) = val {
                         let l = Location {
-                            lon: (pt[0] * 1000000.0).round() as i32,
-                            lat: (pt[1] * 1000000.0).round() as i32,
+                            lon: Degree::from_num(pt[0]),
+                            lat: Degree::from_num(pt[1]),
                         };
                         loc.push(l);
                         debug!("lon: {} lat {} => {:?}", pt[0], pt[1], l);
@@ -555,10 +573,17 @@ fn get_pair_from_str(account: &str) -> sr25519::AppPair {
 
 fn get_ceremony_index(api: &Api<sr25519::Pair>) -> CeremonyIndexType {
     hexstr_to_u64(
-        api.get_storage("EncointerCeremonies", "CurrentCeremonyIndex", None)
+        api.get_storage("EncointerScheduler", "CurrentCeremonyIndex", None)
             .unwrap(),
     )
     .unwrap() as CeremonyIndexType
+}
+
+fn get_current_phase(api: &Api<sr25519::Pair>) -> CeremonyPhaseType {
+    let result_str = api
+        .get_storage("EncointerScheduler", "CurrentPhase", None)
+        .unwrap();
+    CeremonyPhaseType::decode(&mut &hexstr_to_vec(result_str).unwrap()[..]).unwrap()
 }
 
 fn get_meetup_count(api: &Api<sr25519::Pair>, key: CurrencyCeremony) -> MeetupIndexType {
@@ -591,13 +616,6 @@ fn get_attestation_count(api: &Api<sr25519::Pair>, key: CurrencyCeremony) -> Par
         .unwrap(),
     )
     .unwrap() as ParticipantIndexType
-}
-
-fn get_current_phase(api: &Api<sr25519::Pair>) -> CeremonyPhaseType {
-    let result_str = api
-        .get_storage("EncointerCeremonies", "CurrentPhase", None)
-        .unwrap();
-    CeremonyPhaseType::decode(&mut &hexstr_to_vec(result_str).unwrap()[..]).unwrap()
 }
 
 fn get_participant(
@@ -722,17 +740,24 @@ fn new_claim_for(
 ) -> Vec<u8> {
     let cindex = get_ceremony_index(api);
     let mindex = get_meetup_index_for(api, (cid, cindex), &accountid).unwrap();
-    let claim = ClaimOfAttendance::<AccountId> {
+
+    // implicitly assume that participant meet at the right place at the right time
+    let mloc = get_meetup_location(api, cid, mindex).unwrap();
+    let mtime = get_meetup_time(api, cid, mindex).unwrap();
+
+    let claim = ClaimOfAttendance::<AccountId, Moment> {
         claimant_public: accountid,
         currency_identifier: cid,
         ceremony_index: cindex,
         meetup_index: mindex,
+        location: mloc,
+        timestamp: mtime,
         number_of_participants_confirmed: n_participants,
     };
     claim.encode()
 }
 
-fn sign_claim(claim: ClaimOfAttendance<AccountId>, account_str: &str) -> Vec<u8> {
+fn sign_claim(claim: ClaimOfAttendance<AccountId, Moment>, account_str: &str) -> Vec<u8> {
     info!("second call to get_pair_from_str");
     let pair = get_pair_from_str(account_str);
     let accountid = get_accountid_from_str(account_str);
@@ -756,6 +781,54 @@ fn get_currency_identifiers(api: &Api<sr25519::Pair>) -> Option<Vec<CurrencyIden
             Some(cids)
         }
     }
+}
+
+fn get_currency_locations(api: &Api<sr25519::Pair>, cid: CurrencyIdentifier) -> Vec<Location> {
+    Decode::decode(&mut &hexstr_to_vec(
+        api.get_storage(
+            "EncointerCurrencies",
+            "Locations",
+            Some(cid.encode())
+        )
+        .unwrap()).unwrap()[..]).unwrap()
+}
+
+fn get_meetup_location(api: &Api<sr25519::Pair>, cid: CurrencyIdentifier, mindex: MeetupIndexType) -> Option<Location> {
+    let locations = get_currency_locations(api, cid);
+    let lidx = (mindex -1) as usize;
+    if lidx >= locations.len() {
+        return None 
+    } 
+    Some(locations[lidx])
+}
+
+fn get_meetup_time(api: &Api<sr25519::Pair>, cid: CurrencyIdentifier, mindex: MeetupIndexType) -> Option<Moment> {
+    let mlocation = get_meetup_location(api, cid, mindex).unwrap();
+    let mlon: f64 = mlocation.lon.lossy_into();
+    let cindex = get_ceremony_index(&api);
+
+    let next_phase_timestamp = hexstr_to_u64(api.get_storage(
+        "EncointerScheduler",
+        "NextPhaseTimestamp",
+        None
+    ).unwrap()).unwrap();
+
+    let attesting_start = match get_current_phase(api) {
+        CeremonyPhaseType::ASSIGNING => next_phase_timestamp - next_phase_timestamp.rem(ONE_DAY),
+        CeremonyPhaseType::ATTESTING => {
+            let attesting_duration = hexstr_to_u64(api.get_storage(
+                "EncointerScheduler",
+                "PhaseDurations",
+                Some(CeremonyPhaseType::ATTESTING.encode()),
+            ).unwrap()).unwrap();
+            next_phase_timestamp - attesting_duration - next_phase_timestamp.rem(ONE_DAY)
+        },
+        CeremonyPhaseType::REGISTERING => panic!("ceremony phase must be ASSIGNING or ATTESTING to request meetup location.")
+    };
+    
+    // next phase is ATTESTING
+    Some(attesting_start + ONE_DAY
+    - (mlon / 360.0 * ONE_DAY as f64) as Moment )
 }
 
 fn prove_attendance(

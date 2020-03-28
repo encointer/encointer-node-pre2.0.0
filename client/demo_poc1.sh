@@ -2,7 +2,7 @@
 CLIENT="../target/release/encointer-client 127.0.0.1:9979 "
 
 #./bootstrap_demo_currency.sh
-cid=AhfyPnDshTNJSxvLXtRkvRPEDFKcxSERonLK78KdtF5s
+cid=3LjCHdiNbNLKEtwGtBf6qHGZnfKFyjLu9v3uxVgDL35C
 
 # generate and pre-fund accounts
 account1=$($CLIENT new_account)

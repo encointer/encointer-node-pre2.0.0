@@ -28,6 +28,21 @@ default-features = false
 git = "https://github.com/encointer/pallet-encointer-currencies"
 package = "pallet-encointer-currencies"
 
+[dependencies.encointer-scheduler]
+default-features = false
+git = "https://github.com/encointer/pallet-encointer-scheduler"
+package = "pallet-encointer-scheduler"
+
+[dependencies.encointer-balances]
+default-features = false
+git = "https://github.com/encointer/pallet-encointer-balances"
+package = "pallet-encointer-balances"
+
+[dependencies.fixed]
+default-features = false
+git = "https://github.com/encointer/substrate-fixed"
+package = "substrate-fixed"
+
 [dependencies.serde]
 features = ["derive"]
 optional = true
