@@ -4,7 +4,7 @@
 use primitives::{Pair, Public, sr25519};
 use encointer_node_runtime::{
     AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, IndicesConfig, SudoConfig,
-	SystemConfig, WASM_BINARY, Signature, CeremonyPhaseType,
+	SystemConfig, WASM_BINARY, Signature, CeremonyPhaseType, BalanceType,
 	EncointerCeremoniesConfig, EncointerCurrenciesConfig, EncointerSchedulerConfig, 
 };
 use aura_primitives::sr25519::{AuthorityId as AuraId};
@@ -154,7 +154,7 @@ fn testnet_genesis(initial_authorities: Vec<(AuraId, GrandpaId)>,
             ],
 		}),
 		encointer_ceremonies: Some(EncointerCeremoniesConfig {
-			ceremony_reward: 1_000_000,
+			ceremony_reward: BalanceType::from_num(1),
 			time_tolerance: 600_000, // +-10min
 			location_tolerance: 1_000, // [m] 
 		}),

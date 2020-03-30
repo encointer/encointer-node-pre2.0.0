@@ -26,6 +26,8 @@ use version::RuntimeVersion;
 #[cfg(feature = "std")]
 use version::NativeVersion;
 
+use fixed::types::I32F32;
+
 // A few exports that help ease life for downstream crates.
 #[cfg(any(feature = "std", test))]
 pub use sr_primitives::BuildStorage;
@@ -41,6 +43,7 @@ pub use encointer_currencies::Call as EncointerCurrenciesCall;
 pub use encointer_balances::Call as EncointerBalancesCall;
 
 pub use encointer_scheduler::CeremonyPhaseType;
+pub use encointer_balances::{BalanceType, BalanceEntry};
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -58,6 +61,7 @@ pub type AccountIndex = u32;
 
 /// Balance of an account.
 pub type Balance = u128;
+pub type BalanceFixed = I32F32;
 
 /// Index of a transaction in the chain.
 pub type Index = u32;
@@ -265,9 +269,7 @@ impl encointer_currencies::Trait for Runtime {
 }
 
 impl encointer_balances::Trait for Runtime {
-	type Event = Event;
-	type Balance = Balance;
-	type Amount = i64;    
+	type Event = Event; 
 }
 
 construct_runtime!(

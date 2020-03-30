@@ -29,6 +29,8 @@ use keyring::AccountKeyring;
 use keystore::Store;
 use std::path::PathBuf;
 use std::ops::Rem;
+use std::str::FromStr;
+use std::convert::TryInto;
 
 use codec::{Decode, Encode};
 use primitives::{
@@ -37,6 +39,8 @@ use primitives::{
     sr25519 as sr25519_core, Pair
 };
 use fixed::traits::LossyInto;
+use fixed::transcendental::exp;
+
 use substrate_api_client::{
     compose_extrinsic, 
     extrinsic::xt_primitives::{GenericAddress, UncheckedExtrinsicV4},
@@ -51,9 +55,9 @@ use encointer_ceremonies::{
     CurrencyCeremony, MeetupIndexType, ParticipantIndexType, ProofOfAttendance,
 };
 use encointer_scheduler::{CeremonyIndexType, CeremonyPhaseType};
-use encointer_currencies::{CurrencyIdentifier, Location, Degree};
+use encointer_currencies::{CurrencyIdentifier, CurrencyPropertiesType, Location, Degree};
 use encointer_node_runtime::{
-    AccountId, Event, Hash, Signature, Moment, ONE_DAY
+    AccountId, Event, Hash, Signature, Moment, ONE_DAY, BalanceType, BalanceEntry, BlockNumber, Header
 };
 
 use sr_primitives::traits::{IdentifyAccount, Verify};
@@ -234,23 +238,27 @@ fn main() {
     if let Some(_matches) = matches.subcommand_matches("get_balance") {
         let account = _matches.value_of("account").unwrap();
         let accountid = get_accountid_from_str(account);
-        let balance = match matches.value_of("cid") {
+        info!("ss58 is {}", accountid.to_ss58check());
+        match matches.value_of("cid") {
             Some(cid_str) => {
                 let cid = get_cid(cid_str);
+                let bn = get_block_number(&api);
+                let dr = get_demurrage_per_block(&api, cid);
                 let result_str = api
                     .get_storage_double_map("EncointerBalances", "Balance", cid.encode(), accountid.encode())
                     .unwrap();
-                hexstr_to_u256(result_str).unwrap()
+                let entry: BalanceEntry<BlockNumber> = Decode::decode(&mut &hexstr_to_vec(result_str).unwrap()[..]).unwrap();
+                let balance = apply_demurrage(entry, bn, dr);
+                println!("NCTR balance for {} is {} in currency {}", account, balance, cid.encode().to_base58());
             }
             None => {
                 let result_str = api
                     .get_storage("Balances", "FreeBalance", Some(accountid.encode()))
                     .unwrap();
-                hexstr_to_u256(result_str).unwrap()
+                let balance = hexstr_to_u256(result_str).unwrap();
+                println!("ERT balance for {} is {}", account, balance);
             }
         };
-        info!("ss58 is {}", accountid.to_ss58check());
-        println!("balance for {} is {}", account, balance);
     }
 
     if let Some(_matches) = matches.subcommand_matches("get_phase") {
@@ -261,15 +269,34 @@ fn main() {
     if let Some(_matches) = matches.subcommand_matches("transfer") {
         let arg_from = _matches.value_of("from").unwrap();
         let arg_to = _matches.value_of("to").unwrap();
-        let amount = u128::from_str_radix(_matches.value_of("amount").unwrap(), 10)
-            .expect("amount can be converted to u128");
+        
         let from = get_pair_from_str(arg_from);
         let to = get_accountid_from_str(arg_to);
         info!("from ss58 is {}", from.public().to_ss58check());
         info!("to ss58 is {}", to.to_ss58check());
         let _api = api.clone().set_signer(sr25519_core::Pair::from(from));
-        let xt = _api.balance_transfer(GenericAddress::from(to.clone()), amount);
-        let tx_hash = _api.send_extrinsic(xt.hex_encode()).unwrap();
+        let tx_hash = match matches.value_of("cid") {
+            Some(cid_str) => {
+                let cid = get_cid(cid_str);
+                let amount = BalanceType::from_str(_matches.value_of("amount").unwrap())
+                    .expect("amount can be converted to fixpoint");
+                let xt: UncheckedExtrinsicV4<_> = compose_extrinsic!(
+                    _api.clone(),
+                    "EncointerBalances",
+                    "transfer",
+                    to.clone(),
+                    cid,
+                    amount
+                );
+                _api.send_extrinsic(xt.hex_encode()).unwrap()
+            },
+            None => {
+                let amount = u128::from_str_radix(_matches.value_of("amount").unwrap(), 10)
+                    .expect("amount can be converted to u128");
+                let xt = _api.balance_transfer(GenericAddress::from(to.clone()), amount);
+                _api.send_extrinsic(xt.hex_encode()).unwrap()
+            }
+        };
         println!("[+] Transaction got finalized. Hash: {:?}\n", tx_hash);
         let result = _api.get_free_balance(&to);
         println!("balance for {} is now {}", to, result);
@@ -571,6 +598,25 @@ fn get_pair_from_str(account: &str) -> sr25519::AppPair {
     }
 }
 
+fn get_block_number(api: &Api<sr25519::Pair>) -> BlockNumber {
+    let ret = api.get_header(None).unwrap();
+    debug!("header json: {}", ret);
+    let hdr: Header = serde_json::from_str(&ret).unwrap();
+    debug!("decoded: {:?}", hdr);
+    //let hdr: Header= Decode::decode(&mut .as_bytes()).unwrap();
+    hdr.number
+}
+
+fn get_demurrage_per_block(api: &Api<sr25519::Pair>, cid: CurrencyIdentifier) -> BalanceType {
+    let dr_enc = hexstr_to_vec(
+        api.get_storage("EncointerCurrencies", "CurrencyProperties", Some(cid.encode()))
+            .unwrap(),
+    ).unwrap();
+    debug!("DemurragePerBlock raw is {:?}", dr_enc);
+    let prop: CurrencyPropertiesType = Decode::decode(&mut &dr_enc[..]).unwrap();
+    prop.demurrage_per_block
+}
+
 fn get_ceremony_index(api: &Api<sr25519::Pair>) -> CeremonyIndexType {
     hexstr_to_u64(
         api.get_storage("EncointerScheduler", "CurrentCeremonyIndex", None)
@@ -849,4 +895,14 @@ fn prove_attendance(
             attendee.sign(&msg.encode()),
         )),
     }
+}
+
+fn apply_demurrage(entry: BalanceEntry<BlockNumber>, current_block: BlockNumber, demurrage_per_block: BalanceType) -> BalanceType {
+    let elapsed_time_block_number = current_block.checked_sub(entry.last_update).unwrap();
+    let elapsed_time_u32: u32 = elapsed_time_block_number.try_into().unwrap();
+    let elapsed_time = BalanceType::from_num(elapsed_time_u32);
+    let exponent : BalanceType = -demurrage_per_block * elapsed_time;
+    debug!("demurrage per block {}, current_block {}, last {}, elapsed_blocks {}", demurrage_per_block, current_block, entry.last_update, elapsed_time);
+    let exp_result : BalanceType = exp(exponent).unwrap();
+    entry.principal.checked_mul(exp_result).unwrap()
 }

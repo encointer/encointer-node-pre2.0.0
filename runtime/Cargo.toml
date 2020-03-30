@@ -24,6 +24,11 @@ default-features = false
 git = "https://github.com/encointer/pallet-encointer-balances"
 package = "pallet-encointer-balances"
 
+[dependencies.fixed]
+default-features = false
+git = "https://github.com/encointer/substrate-fixed"
+package = "substrate-fixed"
+
 [dependencies.aura]
 default-features = false
 git = "https://github.com/paritytech/substrate"

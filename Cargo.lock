@@ -659,7 +659,7 @@ dependencies = [
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
- "substrate-api-client 2.0.0 (git+https://github.com/scs/substrate-api-client.git)",
+ "substrate-api-client 2.0.0 (git+https://github.com/scs/substrate-api-client.git?branch=cl-get_block-api)",
  "substrate-application-crypto 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
  "substrate-bip39 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-fixed 0.5.4",
@@ -733,6 +733,7 @@ dependencies = [
  "substrate-block-builder-runtime-api 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
  "substrate-consensus-aura-primitives 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
  "substrate-externalities 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
+ "substrate-fixed 0.5.4",
  "substrate-inherents 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
  "substrate-offchain-primitives 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
  "substrate-primitives 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
@@ -2528,6 +2529,7 @@ dependencies = [
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
  "sr-std 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
+ "substrate-fixed 0.5.4",
  "substrate-keyring 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)",
 ]
 
@@ -3808,7 +3810,7 @@ dependencies = [
 [[package]]
 name = "substrate-api-client"
 version = "2.0.0"
-source = "git+https://github.com/scs/substrate-api-client.git#f63debcecd1c6624c91f8d46ac143a690945b89a"
+source = "git+https://github.com/scs/substrate-api-client.git?branch=cl-get_block-api#4f277c69e15d7aa5a1dfc603ba78bbe88ebf388a"
 dependencies = [
  "env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4243,6 +4245,7 @@ version = "0.5.4"
 dependencies = [
  "half 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
  "typenum 1.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -6021,7 +6024,7 @@ dependencies = [
 "checksum structopt-derive 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)" = "ea692d40005b3ceba90a9fe7a78fa8d4b82b0ce627eebbffc329aab850f3410e"
 "checksum strum 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e5d1c33039533f051704951680f1adfd468fd37ac46816ded0d9ee068e60f05f"
 "checksum strum_macros 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)" = "47cd23f5c7dee395a00fa20135e2ec0fffcdfa151c56182966d7a3261343432e"
-"checksum substrate-api-client 2.0.0 (git+https://github.com/scs/substrate-api-client.git)" = "<none>"
+"checksum substrate-api-client 2.0.0 (git+https://github.com/scs/substrate-api-client.git?branch=cl-get_block-api)" = "<none>"
 "checksum substrate-application-crypto 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)" = "<none>"
 "checksum substrate-basic-authorship 2.0.0 (git+https://github.com/paritytech/substrate?rev=3bf9540e72df5ecb3955845764dfee7dcdbb26b5)" = "<none>"
 "checksum substrate-bip39 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3be511be555a3633e71739a79e4ddff6a6aaa6579fa6114182a51d72c3eb93c5"
